@@ -1,4 +1,0 @@
-falcon
-transformers
-torch
-Pillow

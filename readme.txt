@@ -1,0 +1,1 @@
+These are the projects that I am currently working on, will upload cfd simulator scripts soon, currently working mostly on the UAV.

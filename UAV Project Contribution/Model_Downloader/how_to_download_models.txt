@@ -1,1 +1,0 @@
-Simply change the model_name = "EdBianchi/vit-fire-detection" to whatever model you want and run the download_models program in git bash
