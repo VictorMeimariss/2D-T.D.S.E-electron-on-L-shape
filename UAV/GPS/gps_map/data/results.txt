@@ -1,0 +1,4 @@
+map -> With faulty cable reading each 1s. Not good enough
+map_0 -> Faulty cable, reading every 1.5s. Not good
+map_1 -> Good cable, recording every 1s. Very good readings, accuracy mostly <3m sometimes <5m
+map_2 -> Reading with script with automatic reset, concluded that it's not needed because it resets automatically anyway, long blank state because of our faulty script.

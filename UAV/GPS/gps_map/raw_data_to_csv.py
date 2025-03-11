@@ -20,7 +20,7 @@ def convert(nmea_coord, dir): #NMEA coordinates and direction
     return dec_deg # return decimal degree after conversion.
 
 # Input log file where gps data is stored after test.                            
-input_file = os.path.expanduser("~/Documents/GitHub/UAV/GPS/gps_map/data/raw_logs/log_gps.txt")  # Replace with your log file path if script isn't on documents--> github.
+input_file = os.path.expanduser("~/Documents/GitHub/UAV/GPS/gps_map/data/raw_logs/log_0.txt")  # Replace with your log file path if script isn't on documents--> github.
 output_file = os.path.expanduser("~/Documents/GitHub/UAV/GPS/gps_map/data/CSV/gps_raw.csv")  # Output CSV file to desired file path, change if you want.
 
 file_namer = FileNamer(output_file)
@@ -29,7 +29,7 @@ output_file = file_namer.get_filename() # If output name already exists, changes
 # Regex pattern to extract lattitude and longitude from raw log file
 pattern = re.compile(r"^\+CGNSSINFO: (?:[^,]*,){4}\s*([\d.]+)\s*,\s*([NS])\s*,\s*([\d.]+)\s*,\s*([EW])")
 
-with open(input_file, 'r') as log_file, open(output_file, 'w', newline='') as csvfile: # Open log file and create and write on gps_raw_0.csv.
+with open(input_file, 'r', encoding= 'utf-8', errors= 'replace') as log_file, open(output_file, 'w', newline='') as csvfile: # Open log file and create and write on gps_raw_0.csv.
     writer = csv.writer(csvfile)
     writer.writerow(['lat', 'lon'])  # Write CSV header.
 

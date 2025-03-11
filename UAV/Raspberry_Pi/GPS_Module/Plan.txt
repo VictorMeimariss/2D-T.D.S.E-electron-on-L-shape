@@ -1,0 +1,19 @@
+                                                 Signal Loss strategy
+1) When gps loses signal -> Use IMU and odometry as well as estimations as to where the plane actually is (maybe a weighted average of the 2)
+2) Estimations will be based on the last reading, speed and direction of the aircraft (Extrapolation), obviously errors will occur, if the
+plane suddenly changes those two variables.
+3) If we already have the data recorded by the gps, we interpolate by deleting missing blocks or unnatural points and entering our
+interpolation function which estimates where the plane was.
+
+                                    Getting signals and processing them in real time
+1)Ardupilot has automatic processing so the upper strategy is not needed, however the module's output format needs to be the same as the
+input in Ardupilot. ✔
+2)On a latter date we will be able to see the plane's coordinates (ardupilot output) from the mission planner app, for debugging purposes
+we will be sending the module's parsed output to the API
+3)GPS will need to run on boot.
+4)All previous gps readings need to be displayed with timestamps. "displayed in the API, Ardupilot will just have the parsed coords as input"
+5)Whenever GPS loses its signal the last known location needs to be displayed.✔
+
+Things to consider***: Ardupilot already retains and processes last known output so changing the input will probably result in Ardupilot
+mistaking the last known output as a valid GPS input without triggering its failsafe mode, therefore a "No Fix" json message will be
+sent to Ardupilot, the API will be getting the timestamp of the last known location.

@@ -13,7 +13,7 @@ sys.path.append(libs_path)
 from file_namer import FileNamer # Custom lib for renaming if named file already exists
 
 columns = ['lat', 'lon'] # Columns of data in data CSV.
-file_path = os.path.expanduser("~/Documents/GitHub/UAV/GPS/gps_map/data/CSV/gps_raw.csv") # Change if github folder not on documents.
+file_path = os.path.expanduser("~/Documents/GitHub/UAV/GPS/gps_map/data/CSV/gps_raw_12.csv") # Change if github folder not on documents.
 data = pd.read_csv(file_path, usecols=columns) # Read data from csv file
 
 lat = data['lat'].values # Latitude
@@ -48,6 +48,7 @@ fitted_points = list(zip(lat_fitted, lon_fitted)) # fitted point list of (lan,lo
 m = folium.Map( 
     location=[lat[0], lon[0]], # Center of map
     zoom_start=14, # Starting zoom
+    max_zoom = 21,
     tiles='https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}',  # Hybrid tiles for both sattelite photo as well as street names
     attr='Google'  # Attribution
 )
