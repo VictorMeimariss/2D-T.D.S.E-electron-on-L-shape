@@ -1,12 +1,12 @@
 clc;
 clear;
-tic
+
 % 1) Finite elements in two dimensions
 % Domain size
 L = [0, 1];
 
 % Define anonymous force function of PDE on the right-hand side
-f = @(x, y) 2 * pi^2 * sin(pi * x) .* sin(pi * y); % Use element-wise multiplication
+f = @(x, y) -2 * pi^2 * sin(pi * x) .* sin(pi * y); % Use element-wise multiplication
 
 % Define number of squares in each direction
 num_of_squares_x = 20;
@@ -71,7 +71,7 @@ for e = 1:noe
 
     % Compute local stiffness matrix
     Ae = (x21 * y31 - x13 * y21) / 2; % Triangle area that's why /2
-    M = (1 / (4 * Ae)) * ...
+    M = -(1 / (4 * Ae)) * ...
         [y23^2 + x32^2, y23 * y31 + x32 * x13, y23 * y21 + x32 * x21;
          y23 * y31 + x32 * x13, y31^2 + x13^2, y31 * y21 + x13 * x21;
          y23 * y21 + x32 * x21, y31 * y21 + x13 * x21, y21^2 + x21^2];
@@ -101,7 +101,6 @@ for e = 1:noe
     Fl = zeros(3, 1);
     for i = 1:3
         Ni = {N1, N2, N3};
-        %Fl(i) = integral2(@(ksi, hta) f(x(ksi, hta), y(ksi, hta)) .* Ni{i}(ksi, hta) .* detJ, 0, 1, 0, @(ksi) 1 - ksi);
         Fl(i) = quad2d(@(ksi, hta) f(x(ksi, hta), y(ksi, hta)) .* Ni{i}(ksi, hta) .* detJ, 0, 1, 0, @(ksi) 1 - ksi);
     end
 
@@ -138,46 +137,12 @@ F(boundary_nodes) = 0; % F = 0 on the boundaries
 %q = K \ F;
 % Gaussian elimination, too slow for 100x100 time = 0.11 while 
 % for conjugate gradient it was time = 0.08s 
-q = zeros(nop,1); % Initialising solution vector
 
-tol = 10^-7; % Tolerance
-
-% Residual
-r = F - K * q; % Residual is r = b - A * x
-p = r;
-
-% Norm of rbs
-norm0 = norm(r);
-
-% Max iterations set the same as number of points
-Nmax = nop; 
-
-% Iteration counter
-k = 0;
-
-if norm(r) > tol*norm0
-
-    for i = 1 : Nmax 
-        
-        rr = r' * r; 
-        r0 = r;
-        Ap = K * p;
-        a = rr / (p' * Ap);
-    
-        q = q + a * p; % x(n+1) = x(n) + a * p 
-        r = r - a * Ap;
-    
-        if norm(r) < tol * norm0
-            break
-        end
-    
-        beta =  r' * ( r - r0 ) ./ rr;
-        p = r + beta * p;
-        k = k + 1; %  Count the iterations
-    end
-end
-
-disp(['Iterations: ', num2str(k)]);
+tol = eps;
+max_restarts = 10;
+m = 10;
+%[q, iter, flag] = conjugate_gradient(K, F, m, max_restarts, tol);
+[q, iter, flag] = gm_res(K, F, m, max_restarts, tol);
 % Display max to compare to '1' which is the solution
 error = 1 - max(q);
 disp('Solution at max:');
@@ -195,4 +160,3 @@ xlabel('x');
 ylabel('y');
 zlabel('q(x, y)');
 colorbar; % To understand what value each color represents
-toc
