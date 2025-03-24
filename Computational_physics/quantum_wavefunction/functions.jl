@@ -1,9 +1,9 @@
 # Victor Emmanuel Meimaris 23/3/25: Creating Module with all functions used on main.jl
 
-module functions
-
+module Functions
+export coords
 # Creating Coordinate function
-function coords(domain::Tuple{Real, Real}, max_length::Float16) # num_of_squares_x::UInt16, num_of_squares_y::UInt16
+function coords(domain::Tuple{Real, Real}, max_length::Float64) # num_of_squares_x::UInt16, num_of_squares_y::UInt16
 
     # Define domain length in any axis since x and y have the same domain
     domain_length = domain[2] - domain[1]
@@ -37,7 +37,7 @@ function coords(domain::Tuple{Real, Real}, max_length::Float16) # num_of_squares
     temp = a[end, end] + 1
     for i = 1:num_of_squares_x ÷ 2
         b[end, i] = temp
-        global temp +=1
+        temp +=1
     end
 
     # Merging a and b horizontally to form half of global matrix
@@ -65,17 +65,17 @@ function coords(domain::Tuple{Real, Real}, max_length::Float16) # num_of_squares
     # For top left corner of domain
     for i = 1: num_of_squares_y ÷ 2
         for j = 1: num_of_squares_x ÷ 2
-            l2g[temp, :] = [g[i, j], g[i, j + 1], g[i + 1, j + 1], g[i + 1, j]]
-            global temp += 1
+            l2g[temp, :] = [g[i, j], g[i + 1, j], g[i + 1, j + 1], g[i, j + 1]]
+            temp += 1
         end
     end
     # For bottom half
     for i = (num_of_squares_y ÷ 2) + 1: num_of_squares_y
         for j = 1: num_of_squares_x
-            l2g[temp, :] = [g[i, j], g[i, j + 1], g[i + 1, j + 1], g[i + 1, j]]
-            global temp += 1
+            l2g[temp, :] = [g[i, j], g[i + 1, j], g[i + 1, j + 1], g[i, j + 1]]
+            temp += 1
         end
     end
-
+    return g, l2g
 end
 end # Module end
