@@ -1,15 +1,53 @@
-include("functions.jl")  # Include the file
-import .Functions  # Use the module (note the dot '.')
+using Plots
+using SparseArrays
+plotlyjs() # Enable PlotlyJS backend for interactivity
+include("functions.jl")
+import .Functions
 
+# Input variables
 domain = (-1, 1)
-max_length = 1.0
+domain_min = domain[1] # Used later for grid creation
+max_length = 0.02
+V_flag = 1 # Potential V flag for different potentials of Shrodinger equation
 
-results = Functions.grid(domain, max_length)  # Get tuple 
-results_1 = Functions.righthandside(results...) # Splat the tuple
-println(results_1) # Have to create seperate function for solution and seperate for grid
-#f = (x, y) -> x^2 + y^2  # Anonymous function
-#approx = Functions.gauss_quad_2D(f, 2)
-#println("Approximation for n=2: ", approx)
+mesh = Functions.grid(domain, max_length)
 
-#approx = Functions.gauss_quad_2D((θ, η) -> sin(θ) + cos(η), 3)  # Inline anonymous function
-#println("Approximation for n=3: ", approx)
+# Extracting parameters for plotting
+coords = mesh[1]
+l2g = mesh[2]
+noe = mesh[3]
+nop = mesh[4]
+step_size = mesh[6]
+
+# Right hand side equation being tested
+g(x, y) = -2 * pi^2 .* sin(pi * x) .* sin(pi * y)
+
+# Creating matrix equation
+matrix_equation = Functions.matrix_equation(g, mesh..., V_flag)
+# Solution vector
+u = Functions.solution(matrix_equation...)
+
+# Define grid ranges and Z
+xg = -1:max_length:1
+yg = -1:max_length:1
+Z = fill(NaN, length(xg), length(yg)) # Fill with NaN so that no space is occupied
+
+# Map solution vector to grid
+for k in 1:nop # Length of solution vector
+    x, y = coords[k, 1], coords[k, 2]
+    i = round(Int, (x - domain_min) / step_size) + 1  # +1 because Julia is 1-based
+    j = round(Int, (y - domain_min) / step_size) + 1
+    Z[i, j] = u[k]
+end
+
+println("Number of elements: ", noe)
+println("Error at max: ", 1 - maximum(u))
+
+# Plot with interactive surface
+surface(xg, yg, Z, 
+        title="Solution u on L-shaped Domain", 
+        xlabel="x", ylabel="y", zlabel="u",
+        camera=(30, 40), # Adjust camera angle for better view
+        colorbar=true,
+        colorscale="Viridis", # Colormap
+        showscale=true)
