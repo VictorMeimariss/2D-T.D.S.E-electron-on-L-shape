@@ -4,11 +4,12 @@ module Functions
 using SparseArrays, LinearAlgebra, Arpack
 using Plots
 using SparseArrays
-plotlyjs() # Enable PlotlyJS backend for interactivity
-
+#plotlyjs() # Enable PlotlyJS backend for interactivity
+#plotly()
+gr()
 # Constants
-const h_bar = 1#1.054571817 * 10^(-34)
-const m = 1#9.1093837 * 10^(-31)
+const h_bar = 1 #1.054571817e-34
+const m = 1 #9.1093837e-31
 const gamma = (h_bar^2)/(2*m)
 
 # Creating Coordinate/Mesh function, returns grid ,l2g matrix and number of elements / nodes.
@@ -116,6 +117,7 @@ function fem_matrices(V_potential_func, dt, coords::Matrix{Float64}, l2g::Matrix
     # For this script I will assume Neuman and robin coefficients to be zero and then might integrate them for certain problems like scattering
     # I will also assume Dirichlet boundary conditions where the probability ψ is zero in the boundaries(Potential V = infinite in the boundaries), as in this general function I want to model
     # a closed system. If an open system would be simulated, the matrix p would be needed as well, whichs contains the neuman and robin coefficients
+    println("Creating F.E.M matrices...")
 
     # Shape/basis functions for integration
     N = [
@@ -185,6 +187,7 @@ function fem_matrices(V_potential_func, dt, coords::Matrix{Float64}, l2g::Matrix
             (ksi, eta) -> N[i](ksi, eta) * N[j](ksi, eta) * abs(detJ(ksi, eta))
             for i in 1:4, j in 1:4
         ]
+
         # Add results to local Hamiltonian and Mass matrix 
         for i = 1:4
             @inbounds for j = 1:4
@@ -241,32 +244,31 @@ function fem_matrices(V_potential_func, dt, coords::Matrix{Float64}, l2g::Matrix
     catch e
         println("M is not positive definite: ", e)
     end=#
+
     # Multiply H by i * dt / (2*h_bar) to include everything in H and hold previous value in tempo for latter use
     tempo = H
     H = H * im * dt / (2 * h_bar)
-
+    
     # Matrices A and B for RHS and LHS
     A = H + M
     B = M - H
     
     # Now our system looks like this: Aψ(n+1) = Βψn, almost ready for the solution with crank nicolson
-    return A, B, lengthr, dt, M, boundary_nodes, tempo
+    return A, B, lengthr, dt, M, boundary_nodes, tempo, step_size
 end
 
-# Creating wavefunction equation to solve with function solution
-function wavefunction(x, y ; x0, y0, sigma_x, sigma_y, kx_unscaled::Float64, ky_unscaled::Float64, step_size)
-    kx = kx_unscaled * pi / 2#* ((2 * pi) / (1 / step_size))
-    ky = ky_unscaled * pi / 2#* ((2 * pi) / (1 / step_size))
-    gaussian = (1 / (pi * sigma_x * sigma_y)) * exp(-((x - x0)^2 / (2 * sigma_x^2) + (y - y0)^2 / (2 * sigma_y^2)))
-    plane_wave = exp(im * (kx * x + ky * y))
+# Creating inital wavefunction equation Ψ0 to solve with function solution
+function wavefunction(x, y ; x0, y0, sigma, kx::Float64, ky::Float64)
+    gaussian = exp(- ((x - x0)^2 + (y - y0)^2 ) / (2 * sigma^2))
+    plane_wave = exp(-im * (kx * x + ky * y))
     return gaussian * plane_wave
 end
 # Creating function for getting solution from Ax=b where A is A,x is ψ(n+1) and b = B*ψn
-function solution(coords, nop, psi_zero, time, A, B, lengthr, dt, M, boundary_nodes, tempo)
+function solution(coords, nop, psi_zero, time, A, B, lengthr, dt, M, boundary_nodes, tempo, step_size)
     
     # n steps of time
     time_domain = time[2] - time[1]
-    n_steps = Int128(time_domain ÷ dt )+ 1
+    n_steps = Int128(time_domain ÷ dt) + 1
 
     # Initialize psi_0 as a 1D vector
     psi_0 = Vector{ComplexF64}(undef, nop)
@@ -279,46 +281,56 @@ function solution(coords, nop, psi_zero, time, A, B, lengthr, dt, M, boundary_no
     # Enforce Dirichlet boundary conditions (ψ = 0 at boundaries)
     psi_0[collect(boundary_nodes)] .= 0
 
-    norm = sqrt(real(psi_0' * M * psi_0))
-    #println("Unnormalized max |ψ₀|: ", maximum(abs.(psi_0)))
-    #println("Unnormalized norm: ", norm)
-    
-    psi_0 = psi_0 / norm
-    temp = psi_0
-    #println("Normalized max |ψ₀|: ", maximum(abs.(psi_0)))
-    #println("Normalized norm check: ", sqrt(real(psi_0' * M * psi_0)))
+    # Creating normalisation factor A
+    A_ = sqrt(sum(psi_0' * psi_0 * step_size^2)) 
 
-    # Calculate initial energy
-    #E_initial = real(psi_0' * tempo * psi_0)
-    #println("Initial energy: ", E_initial)
+    psi_0 = (psi_0 / A_) # Normalising Ψ0
+    temp = psi_0 # Keeping temp to plot inital function
 
-    # Time stepping setup
+    sum_check = sum(psi_0' * psi_0 * step_size^2) # Check if sum_check == 1 as it should be
+    println("Normalized integral check: ", sum_check)
+
+    # Calculate initial energy, (must stay the same until the end, since this is a closed system sim)
+    E_initial = real(psi_0' * tempo * psi_0)
+    println("Initial energy: ", E_initial)
+
+    # Preconditioning
     A_LU = lu(A)
+
+    # Initialising solution
     psi = similar(psi_0)
+
     # Time stepping loop
-    for n = 1:10000#n_steps
+    for n = 1:n_steps
 
         # Solve psi
         psi = A_LU \ (B * psi_0)
-        
+
+        #println(sum(psi'*psi*step_size^2)) # Checking if integral stays the same
+
         # Asigning value to psi_0
         psi_0 = psi
 
     end
     
-    #= Final calculations
-    final_norm = sqrt(real(psi_0' * M * psi_0))
-    final_E = real(psi_0' * tempo * psi_0) / final_norm
-    
-    println("\nFinal results:")
-    println("Norm: $final_norm")
-    println("Max |ψ|: ", maximum(abs.(psi_0)))
-    println("Energy: $final_E")=#
+    # Final calculations
+
+    final_E = real(psi_0' * tempo * psi_0)
+    println("Energy: $final_E")
 
     return psi, temp # return psi and the initial state
 end
-function animated_solution(step_size, coords, nop, psi_zero, time, A, B, lengthr, dt, M, boundary_nodes, tempo)
-    # Initialize
+
+# Creating animated solution over desired time
+function animated_solution(coords, nop, psi_zero, time, A, B, lengthr, dt, M, boundary_nodes, tempo, step_size)
+    
+    println("Iterating with Crank-Nicolson...")
+
+    # n steps of time
+    time_domain = time[2] - time[1]
+    n_steps = Int128(time_domain ÷ dt) + 1
+
+    # Initialize psi_0 as a 1D vector with a solution at each point so "nop"
     psi_0 = Vector{ComplexF64}(undef, nop)
 
     # Extracting data from psi_zero function to psi_0 vector on our coordinate system
@@ -329,66 +341,87 @@ function animated_solution(step_size, coords, nop, psi_zero, time, A, B, lengthr
     # Enforce Dirichlet boundary conditions (ψ = 0 at boundaries)
     psi_0[collect(boundary_nodes)] .= 0
 
-    norm = sqrt(real(psi_0' * M * psi_0))
-    #println("Unnormalized max |ψ₀|: ", maximum(abs.(psi_0)))
-    #println("Unnormalized norm: ", norm)
-    
-    psi_0 = psi_0 / norm
-    
-    # Precompute
-    A_LU = lu(A)
-    frames = []
-    xg = yg = range(-1, 1, step=step_size)
+    # Creating normalisation factor A
+    A_ = sqrt(sum(psi_0' * psi_0 * step_size^2)) 
 
-    # Calculate global maximum for consistent scaling
-    global_max = maximum(abs2.(psi_0)) * 1.5 + 2
+    # Normalising Ψ0
+    psi_0 = (psi_0 / A_)
     
-    # Time evolution
-    for n in 1:120000 # Reduce frames for quicker animation
+    # Creating range for animation
+    xg = yg = range(-1, 1, step = step_size)
+
+    # Calculate global maximum for consistent scaling in plotting
+    global_max = maximum(abs2.(psi_0)) * 1.2
+
+    # Preconditioning
+    A_LU = lu(A)
+
+    # Initialisng frames and solution matrices to plot
+    frames = []
+    Z = fill(NaN, lengthr, lengthr)
+
+    # Time evolution loop with Crank Nicolson
+    for n in 1:7500 # Either reduce frames for quicker animation or use with n_steps and time domain
+
+        # Solving psi with solver
         psi = A_LU \ (B * psi_0)
-        
-        # Capture every 200th frame
-        if n % 200 == 0
-            Z = fill(NaN, lengthr, lengthr)
+
+        # Time variable for plotting
+        t = (n - 1) * dt
+
+        # Capture every 50th frame
+        if n % 50 == 0
             for k in 1:nop
                 i, j = coord_to_index(coords[k,:], step_size)
-                Z[i,j] = abs2(psi[k])
+                Z[i,j] = abs2(psi[k]) # ||^2 value of psi
             end
-            push!(frames, surface(
-                xg, yg, Z,
-                title = "Wavefunction",
-                colorbar = true,
-                colorscale = "Viridis",
-                showscale = true,
-                
-                # Critical stabilization parameters:
-                zlim = (0, global_max),          # Fix z-axis range
-                xlim = (minimum(xg), maximum(xg)), # Fix x-axis
-                ylim = (minimum(yg), maximum(yg)), # Fix y-axis
-                clims = (0, global_max),         # Lock color scale
-                # Backend-agnostic stabilization
-                aspect_ratio = :equal,      # Lock proportions
-                legend = false,             # Remove legend
-                grid = false,              # Remove grid lines (optional)
-                
-                camera = (30, 25, 1.0),       # Fixed view angle
-                show_boundingbox = true, # Force consistent box rendering
-                
-                # These prevent any automatic adjustments:
-                autoscale = :none,
-                normalize = false,
-                ))
+            # Plotting variable
+            p = plot(
+                surface(xg, yg, Z, # Surface for 3d plot
+                    colormap = :viridis, # Matlab colormap
+                    colorbar = true, # Colorbar at the right to see at values
+                    title = "Wavefunction |Ψ|² at t = $(round(t, digits=3))",# Printing time as well
+                    xlabel="x", ylabel="y", zlabel="|ψ(x, y)|²",
+                    zlim = (0, global_max),
+                    xlim = extrema(xg),# Extremes for x, y and the colorbar
+                    ylim = extrema(yg),
+                    clim = (0, global_max),
+                    showscale = false,
+                    camera = (30, 25, 1.0),
+                    showlegend = false,
+                    show_boundingbox = false,
+                    overwrite_figure = false
+                ),
+                size = (800, 600),  # Resolution
+                dpi = 300  # DPI
+            )
+            push!(frames, p)# Push p into frames for animation
         end
-        psi_0 = psi
+        psi_0 = psi # Ψ0 = Ψ to continue iterative method
     end
-    return frames
+
+    lengthf = length(frames)
+    # Saving animation into variable
+    println("Creating animation...")
+
+    anim = @animate for (i, frame) in enumerate(frames)
+        plot(frame)  # Plot the current frame
+        println("Progress: $i/$lengthf")  # Show current/total
+    end
+
+    # Printing energy level
+    Energy = real(psi_0' * tempo * psi_0)
+    println("Energy of closed system is: ", Energy)
+    return anim
 end
+
 # Helper function for animation
 function coord_to_index(coord, step_size)
-    i = round(Int, (coord[1] + 1) / step_size) + 1
-    j = round(Int, (coord[2] + 1) / step_size) + 1
+    j = round(Int, (coord[1] + 1) / step_size) + 1
+    i = round(Int, (coord[2] + 1) / step_size) + 1
     return (i, j)
 end
+
 # Creating 2 dimensional gauss_quadrature function to use to solve the integrals needed in FEM integrating from -1 to 1
 function gauss_quad_2D(funct, n)# omada, mission planner, api, 
     if n == 2
@@ -399,8 +432,12 @@ function gauss_quad_2D(funct, n)# omada, mission planner, api,
         ksi = (0, -0.7745966692, 0.7745966692)
         eta = (0, -0.7745966692, 0.7745966692)
         w = (0.8888888889, 0.5555555556, 0.5555555556)
+    elseif n == 4
+        ksi = (-0.8611363116, -0.3399810436, 0.3399810436, 0.8611363116)
+        eta = (-0.8611363116, -0.3399810436, 0.3399810436, 0.8611363116)
+        w = (0.3478548451, 0.6521451549, 0.6521451549, 0.3478548451)
     else
-        error("Only n = 2 or n = 3 are supported")
+        error("Only n = 2, 3, 4 are supported")
     end
     result = 0.0
     for i = 1:n
@@ -410,6 +447,7 @@ function gauss_quad_2D(funct, n)# omada, mission planner, api,
     end
     return result
 end
+
 # Creating function for potential V and its flags
 function V_function(V_flag::Int64, V0)
     if V_flag == 1 # Infinite potential well with bottom at V0
@@ -419,5 +457,10 @@ function V_function(V_flag::Int64, V0)
     elseif V_flag == 3 # Well of potential V0
         return (x, y) -> -V0
     end
+end
+
+# Solver function Bicgstab since system has non spd and complex matrices
+function bicgstab_vic()
+
 end
 end # Module end
