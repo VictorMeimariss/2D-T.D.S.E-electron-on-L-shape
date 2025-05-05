@@ -224,6 +224,7 @@ function fem_matrices(V_potential_func, dt, coords::Matrix{Float64}, l2g::Matrix
     #= Tests
     println("M symmetric?",norm(M-M')<1e-10)
     println("H symmetric?",norm(H-H')<1e-10)
+    println("Is H hermittian?", ishermitian(H))
     
     # Test H for positive semi-definiteness
     try
@@ -351,7 +352,7 @@ function animated_solution(coords, nop, psi_zero, time, A, B, lengthr, dt, M, bo
     xg = yg = range(-1, 1, step = step_size)
 
     # Calculate global maximum for consistent scaling in plotting
-    global_max = maximum(abs2.(psi_0)) * 1.2
+    global_max = maximum(abs2.(psi_0)) * 1.4
 
     # Preconditioning
     A_LU = lu(A)
@@ -361,7 +362,7 @@ function animated_solution(coords, nop, psi_zero, time, A, B, lengthr, dt, M, bo
     Z = fill(NaN, lengthr, lengthr)
 
     # Time evolution loop with Crank Nicolson
-    for n in 1:7500 # Either reduce frames for quicker animation or use with n_steps and time domain
+    for n in 1:3750 #240000 # Either reduce frames for quicker animation or use with n_steps and time domain
 
         # Solving psi with solver
         psi = A_LU \ (B * psi_0)
@@ -370,7 +371,7 @@ function animated_solution(coords, nop, psi_zero, time, A, B, lengthr, dt, M, bo
         t = (n - 1) * dt
 
         # Capture every 50th frame
-        if n % 50 == 0
+        if n % 25 == 0 || n == 1 #800
             for k in 1:nop
                 i, j = coord_to_index(coords[k,:], step_size)
                 Z[i,j] = abs2(psi[k]) # ||^2 value of psi
@@ -449,13 +450,13 @@ function gauss_quad_2D(funct, n)# omada, mission planner, api,
 end
 
 # Creating function for potential V and its flags
-function V_function(V_flag::Int64, V0)
-    if V_flag == 1 # Infinite potential well with bottom at V0
-        return (x,y) -> V0
-    elseif V_flag == 2 # Barrier of potential V0 at area around x0 and y0
-        return (x, y) -> V0
+function V_function(V_flag::Int64, V0 = 0.0, x0 = 0.0, y0 = -0.5, r = 0.2)
+    if V_flag == 1 # Infinite potential well with bottom at 0.0 or at selected V0
+        return (x,y) -> V0 # Which equals 0.0 at default
+    elseif V_flag == 2 # Barrier of potential V0 at area around x0 and y0"default center at (-0.3, -0.5) with radius 0.1"
+        return (x, y) -> ((x - x0)^2 + (y - y0)^2 <= r^2 ? V0 : 0.0)
     elseif V_flag == 3 # Well of potential V0
-        return (x, y) -> -V0
+        return (x, y) -> ((x - x0)^2 + (y - y0)^2 <= r^2 ? -V0 : 0.0)
     end
 end
 
