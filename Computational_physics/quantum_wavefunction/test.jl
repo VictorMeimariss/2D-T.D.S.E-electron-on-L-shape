@@ -55,7 +55,7 @@ psi_0(x, y) = Functions.wavefunction(x, y; x0, y0, sigma, kx, ky)
 
 # Save as mp4
 anim = Functions.animated_solution(coords, nop, psi_0, time, matrices...)
-mp4(anim, "quantum_revival.mp4", fps=15)
+mp4(anim, "Animations/video5.mp4", fps=15)
 println("Done")
 
 
