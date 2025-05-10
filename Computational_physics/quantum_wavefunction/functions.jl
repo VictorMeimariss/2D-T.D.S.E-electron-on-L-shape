@@ -4,6 +4,8 @@ module Functions
 using SparseArrays, LinearAlgebra, Arpack
 using Plots
 using SparseArrays
+using AlgebraicMultigrid
+using IncompleteLU
 #plotlyjs() # Enable PlotlyJS backend for interactivity
 #plotly()
 gr()
@@ -295,30 +297,30 @@ function solution(coords, nop, psi_zero, time, A, B, lengthr, dt, M, boundary_no
     E_initial = real(psi_0' * tempo * psi_0)
     println("Initial energy: ", E_initial)
 
-    # Preconditioning
-    A_LU = lu(A)
 
     # Initialising solution
     psi = similar(psi_0)
-
+    A_LU = lu(A)
+    t_start = Base.time()
     # Time stepping loop
-    for n = 1:n_steps
+    for n = 1:1000#n_steps
 
         # Solve psi
         psi = A_LU \ (B * psi_0)
-
+        #psi = bicgstab_vic(A, B * psi_0, psi_0, 1e-15, 300)
         #println(sum(psi'*psi*step_size^2)) # Checking if integral stays the same
 
         # Asigning value to psi_0
         psi_0 = psi
 
     end
-    
+    t_end = Base.time()
     # Final calculations
 
     final_E = real(psi_0' * tempo * psi_0)
     println("Energy: $final_E")
-
+    time_ = t_end - t_start
+    println("Time elapsed using solver: ", time_)
     return psi, temp # return psi and the initial state
 end
 
@@ -362,7 +364,7 @@ function animated_solution(coords, nop, psi_zero, time, A, B, lengthr, dt, M, bo
     Z = fill(NaN, lengthr, lengthr)
 
     # Time evolution loop with Crank Nicolson
-    for n in 1:3750 #240000 # Either reduce frames for quicker animation or use with n_steps and time domain
+    for n in 1:15000 #240000 # Either reduce frames for quicker animation or use with n_steps and time domain
 
         # Solving psi with solver
         psi = A_LU \ (B * psi_0)
@@ -371,7 +373,7 @@ function animated_solution(coords, nop, psi_zero, time, A, B, lengthr, dt, M, bo
         t = (n - 1) * dt
 
         # Capture every 50th frame
-        if n % 25 == 0 || n == 1 #800
+        if n % 100 == 0 || n == 1 #800
             for k in 1:nop
                 i, j = coord_to_index(coords[k,:], step_size)
                 Z[i,j] = abs2(psi[k]) # ||^2 value of psi
@@ -460,8 +462,67 @@ function V_function(V_flag::Int64, V0 = 0.0, x0 = 0.0, y0 = -0.5, r = 0.2)
     end
 end
 
-# Solver function Bicgstab since system has non spd and complex matrices
-function bicgstab_vic()
+# Solver function Bicgstab since system has non spd and complex matrices A and B * psi_0
+function bicgstab_vic(A, b, x0, tol, Nmax)
 
+    # Preallocate vectors
+    x = x0 # Solution vector
+    r = similar(b) # Residual vector
+    r .= b .- A * x
+    r_hat = copy(r)
+    p = copy(r) # Vector p
+    v = similar(b)
+    s = similar(b)
+    s_hat = similar(b)
+    t_hat = similar(b)
+    t = similar(b) 
+    ro = dot(r_hat, r) # ρ0
+
+    # Iteration counter for optimization
+    iter = 0
+
+    # b Norm
+    norm_b = norm(b)
+
+    # Using preconditioner, as a test using ilu, but right now its way too slow
+    K = ilu(A, τ=0.1)
+
+    for i in 1:Nmax
+        mul!(v, A, p)
+        alpha = ro / dot(r_hat, v)
+        h = x + alpha * p
+        s = r - alpha * v
+        s_res = norm(s) / norm_b
+
+        # Break if reached tolerance
+        if s_res < tol
+            x = h
+            #println("Converged at iteration $iter with residual norm: $s_res")
+            break
+        end
+        s_hat .= K \ s
+        t = A * s_hat
+        t_hat .= K \ t
+        omega = dot(t_hat, s_hat) / dot(t_hat, t_hat)
+        x = h + omega * s_hat
+        r = s - omega * t
+
+        rel_res = norm(r) / norm_b
+        
+        if rel_res < tol
+            #println("Converged at iteration $iter with residual norm: $rel_res")
+            break
+        end
+        temp = ro
+        ro = dot(r_hat, r)
+        beta = (ro / temp) * (alpha / omega)
+        p = r + beta * (p - omega * v)
+        iter += 1
+        if i == Nmax
+            println("Exiting with max iterations..")
+        end
+    end
+    return x
 end
+
 end # Module end

@@ -1,8 +1,6 @@
 using Plots
 using SparseArrays
-#gr()
 plotlyjs() # Enable PlotlyJS backend for interactivity
-#plotly()
 include("functions.jl")
 import .Functions
 
@@ -14,10 +12,10 @@ max_length = 0.025
 
 # Wavefunction parameters
 sigma = 0.15
-y0 = - 0.5
+y0 =  - 0.5
 x0 = - 0.5
-ky =  - 5.0 # + goes to the negative direction 
-kx = -5.0#- 5.0
+ky =  0.0 # + goes to the negative direction 
+kx = -2.0#- 5.0
 
 # Create mesh and extract parameters
 mesh = Functions.grid(domain, max_length)
@@ -31,11 +29,11 @@ lengthr = mesh[7]
 dt = step_size^2 / 4 # Time step dt<(dx)^2 for results
 
 # Potential function
-V_flag = 1 # Potential V flag
-V0 = 0.0#999 # Only needed for flags>1
+V_flag = 3 # Potential V flag
+V0 = 999#1e16 # Only needed for flags>1 0.0#
 x_0 = 0.0
 y_0 = - 0.5
-r_0 = 0.1
+r_0 = 0.5
 V_potential_func = Functions.V_function(V_flag, V0, x_0, y_0, r_0)
 
 # Create grid ranges
@@ -46,20 +44,19 @@ yg = range(domain_min, -domain_min, step=step_size)
 matrices = Functions.fem_matrices(V_potential_func, dt, mesh...)
 
 println("Number of elements: ", noe)
-println("Time step: ", dt)
+println("Time step: ", dt) # 34:20
 # Initialize Z and F matrices
 Z = fill(NaN, lengthr, lengthr) # Fill with NaN so that no space is occupied
 F = fill(NaN, lengthr, lengthr)
 # Define wavefunction and its real part
 psi_0(x, y) = Functions.wavefunction(x, y; x0, y0, sigma, kx, ky)
-
-# Save as mp4
+#= Save as mp4
 anim = Functions.animated_solution(coords, nop, psi_0, time, matrices...)
-mp4(anim, "Animations/video5.mp4", fps=15)
-println("Done")
+mp4(anim, "Animations/test2_lowermomentum.mp4", fps=15)#infinite_potential_well_2
+println("Done")=#
 
 
-#= Create two plots for testing
+# Create two plots for testing
 
 psi = Functions.solution(coords, nop, psi_0, time, matrices...)
 psi_final = abs2.(psi[1])
@@ -95,4 +92,4 @@ p1 = surface(xg, yg, Z,
         colorbar=true,
         colorscale="Viridis",
         showscale=true)
-display(p1)=#
+display(p1)
