@@ -30,7 +30,7 @@ dt = step_size^2 / 4 # Time step dt<(dx)^2 for results
 
 # Potential function
 V_flag = 3 # Potential V flag
-V0 = 999#1e16 # Only needed for flags>1 0.0#
+V0 = 500#999# Only needed for flags>1
 x_0 = 0.0
 y_0 = - 0.5
 r_0 = 0.5
@@ -44,22 +44,23 @@ yg = range(domain_min, -domain_min, step=step_size)
 matrices = Functions.fem_matrices(V_potential_func, dt, mesh...)
 
 println("Number of elements: ", noe)
-println("Time step: ", dt) # 34:20
+println("Time step: ", dt) 
 # Initialize Z and F matrices
 Z = fill(NaN, lengthr, lengthr) # Fill with NaN so that no space is occupied
 F = fill(NaN, lengthr, lengthr)
 # Define wavefunction and its real part
 psi_0(x, y) = Functions.wavefunction(x, y; x0, y0, sigma, kx, ky)
+
 #= Save as mp4
 anim = Functions.animated_solution(coords, nop, psi_0, time, matrices...)
-mp4(anim, "Animations/test2_lowermomentum.mp4", fps=15)#infinite_potential_well_2
+mp4(anim, "Animations/potential_-500.mp4", fps=15)#infinite_potential_well_2
 println("Done")=#
 
 
 # Create two plots for testing
 
 psi = Functions.solution(coords, nop, psi_0, time, matrices...)
-psi_final = abs2.(psi[1])
+#=psi_final = abs2.(psi[1])
 psi_initial = abs2.(psi[2])
 
 # Define grid ranges and Z
@@ -92,4 +93,4 @@ p1 = surface(xg, yg, Z,
         colorbar=true,
         colorscale="Viridis",
         showscale=true)
-display(p1)
+display(p1)=#

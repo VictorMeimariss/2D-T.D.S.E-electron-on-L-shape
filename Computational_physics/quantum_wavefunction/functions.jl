@@ -306,8 +306,8 @@ function solution(coords, nop, psi_zero, time, A, B, lengthr, dt, M, boundary_no
     for n = 1:1000#n_steps
 
         # Solve psi
-        psi = A_LU \ (B * psi_0)
-        #psi = bicgstab_vic(A, B * psi_0, psi_0, 1e-15, 300)
+        #psi = A_LU \ (B * psi_0)
+        psi = bicgstab_vic(A, B * psi_0, 1e-10, 150)
         #println(sum(psi'*psi*step_size^2)) # Checking if integral stays the same
 
         # Asigning value to psi_0
@@ -315,13 +315,29 @@ function solution(coords, nop, psi_zero, time, A, B, lengthr, dt, M, boundary_no
 
     end
     t_end = Base.time()
+    t_start1 = Base.time()
+    # Time stepping loop
+    for n = 1:1000#n_steps
+
+        # Solve psi
+        psi = A_LU \ (B * psi_0)
+        #psi = bicgstab_vic(A, B * psi_0, 1e-10, 150)
+        #println(sum(psi'*psi*step_size^2)) # Checking if integral stays the same
+
+        # Asigning value to psi_0
+        psi_0 = psi
+
+    end
+    t_end1 = Base.time()
     # Final calculations
 
     final_E = real(psi_0' * tempo * psi_0)
     println("Energy: $final_E")
     time_ = t_end - t_start
-    println("Time elapsed using solver: ", time_)
-    return psi, temp # return psi and the initial state
+    time__ = t_end1 - t_start1
+    println("Time elapsed using solver : ", time_)
+    println("Time elapsed using backslash : ", time__)
+    return 1#psi, temp # return psi and the initial state
 end
 
 # Creating animated solution over desired time
@@ -463,10 +479,13 @@ function V_function(V_flag::Int64, V0 = 0.0, x0 = 0.0, y0 = -0.5, r = 0.2)
 end
 
 # Solver function Bicgstab since system has non spd and complex matrices A and B * psi_0
-function bicgstab_vic(A, b, x0, tol, Nmax)
+function bicgstab_vic(A, b, tol, Nmax)
+
+    # Getting size of A
+    n = size(A, 1)
 
     # Preallocate vectors
-    x = x0 # Solution vector
+    x = zeros(ComplexF64, n)
     r = similar(b) # Residual vector
     r .= b .- A * x
     r_hat = copy(r)
@@ -485,7 +504,7 @@ function bicgstab_vic(A, b, x0, tol, Nmax)
     norm_b = norm(b)
 
     # Using preconditioner, as a test using ilu, but right now its way too slow
-    K = ilu(A, τ=0.1)
+    K = ilu(A, τ = 1e-6)
 
     for i in 1:Nmax
         mul!(v, A, p)
