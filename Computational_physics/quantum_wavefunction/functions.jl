@@ -400,7 +400,7 @@ function animated_solution(coords, nop, psi_zero, time, A, B, lengthr, dt, M, bo
                     colormap = :viridis, # Matlab colormap viridis
                     colorbar = true, # Colorbar at the right to see at values
                     title = "Electron wavefunction |Ψ|² at t = $(round(t, digits=3)) femtoseconds",# Printing time as well
-                    xlabel="x", ylabel="y", zlabel="|ψ(x, y)|²",
+                    xlabel="x in nm", ylabel="y in nm", zlabel="|ψ(x, y)|²",
                     zlim = (0, global_max),
                     xlim = extrema(xg),# Extremes for x, y and the colorbar
                     ylim = extrema(yg),

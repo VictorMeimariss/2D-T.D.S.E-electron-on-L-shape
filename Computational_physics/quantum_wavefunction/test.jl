@@ -5,7 +5,7 @@ include("functions.jl")
 import .Functions
 
 # Input variables
-domain = (-1, 1)
+domain = (-1, 1) # In nanometers
 time = (0, 1)
 domain_min = domain[1]
 max_length = 0.025
@@ -56,7 +56,7 @@ psi_0(x, y) = Functions.wavefunction(x, y; x0, y0, sigma, kx, ky)
 
 # Save as mp4
 anim = Functions.animated_solution(coords, nop, psi_0, time, matrices..., 17000, 100)
-mp4(anim, "Animations/electron_x_potential well_7eV.mp4", fps=15)#infinite_potential_well_2
+mp4(anim, "Animations/Electron/electron_x_potential well_7eV.mp4", fps=15)#infinite_potential_well_2
 println("Done")
 
 
