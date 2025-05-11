@@ -1,18 +1,15 @@
 #= Victor Emmanuel Meimaris 23/3/25: Creating Module with all functions used on main.jl, I will be
 explaining the numbers in my report. =#
 module Functions
-using SparseArrays, LinearAlgebra, Arpack
-using Plots
-using SparseArrays
-using AlgebraicMultigrid
-using IncompleteLU
+using SparseArrays, LinearAlgebra, Arpack, Plots, SparseArrays, IncompleteLU
+
 #plotlyjs() # Enable PlotlyJS backend for interactivity
-#plotly()
-gr()
+gr() # Default backend for animations 
+
 # Constants
-const h_bar = 1 #1.054571817e-34
-const m = 1 #9.1093837e-31
-const gamma = (h_bar^2)/(2*m)
+const h_bar = 0.65821220e-3 # h_bar actual value in eV * ps  
+const m = 9.1093837e-31 * (10e25 / 1.602117662 )# mass of electron in kg is 9.1093837e-31 but we want in (eV * ps^2) / nm^2
+const gamma = (h_bar^2)/(2*m) # in eV * nm^2
 
 # Creating Coordinate/Mesh function, returns grid ,l2g matrix and number of elements / nodes.
 function grid(domain::Tuple{Real, Real}, max_length::Float64) # num_of_squares_x::UInt16, num_of_squares_y::UInt16
@@ -295,12 +292,12 @@ function solution(coords, nop, psi_zero, time, A, B, lengthr, dt, M, boundary_no
 
     # Calculate initial energy, (must stay the same until the end, since this is a closed system sim)
     E_initial = real(psi_0' * tempo * psi_0)
-    println("Initial energy: ", E_initial)
+    println("Initial energy: $E_initial eV")
 
 
     # Initialising solution
     psi = similar(psi_0)
-    A_LU = lu(A)
+    A_LU = lu(A)#=
     t_start = Base.time()
     # Time stepping loop
     for n = 1:1000#n_steps
@@ -313,11 +310,12 @@ function solution(coords, nop, psi_zero, time, A, B, lengthr, dt, M, boundary_no
         # Asigning value to psi_0
         psi_0 = psi
 
-    end
-    t_end = Base.time()
+    t_end
+    t_end = Base.time()=#
     t_start1 = Base.time()
-    # Time stepping loop
-    for n = 1:1000#n_steps
+    # With \
+    psi_0 = temp
+    for n = 1:1#n_steps
 
         # Solve psi
         psi = A_LU \ (B * psi_0)
@@ -332,16 +330,18 @@ function solution(coords, nop, psi_zero, time, A, B, lengthr, dt, M, boundary_no
     # Final calculations
 
     final_E = real(psi_0' * tempo * psi_0)
-    println("Energy: $final_E")
-    time_ = t_end - t_start
+    println("Energy: $final_E eV")
+
+    #time_ = t_end - t_start
+    #println("Time elapsed using solver : ", time_)
+
     time__ = t_end1 - t_start1
-    println("Time elapsed using solver : ", time_)
     println("Time elapsed using backslash : ", time__)
-    return 1#psi, temp # return psi and the initial state
+    return 1#psi, temp # return psi and the initial state 1 #
 end
 
 # Creating animated solution over desired time
-function animated_solution(coords, nop, psi_zero, time, A, B, lengthr, dt, M, boundary_nodes, tempo, step_size)
+function animated_solution(coords, nop, psi_zero, time, A, B, lengthr, dt, M, boundary_nodes, tempo, step_size, no_fr, no_afr)
     
     println("Iterating with Crank-Nicolson...")
 
@@ -370,7 +370,7 @@ function animated_solution(coords, nop, psi_zero, time, A, B, lengthr, dt, M, bo
     xg = yg = range(-1, 1, step = step_size)
 
     # Calculate global maximum for consistent scaling in plotting
-    global_max = maximum(abs2.(psi_0)) * 1.4
+    global_max = maximum(abs2.(psi_0)) * 1.6
 
     # Preconditioning
     A_LU = lu(A)
@@ -380,16 +380,16 @@ function animated_solution(coords, nop, psi_zero, time, A, B, lengthr, dt, M, bo
     Z = fill(NaN, lengthr, lengthr)
 
     # Time evolution loop with Crank Nicolson
-    for n in 1:15000 #240000 # Either reduce frames for quicker animation or use with n_steps and time domain
+    for n in 1:no_fr # Produce
 
         # Solving psi with solver
         psi = A_LU \ (B * psi_0)
 
         # Time variable for plotting
-        t = (n - 1) * dt
-
-        # Capture every 50th frame
-        if n % 100 == 0 || n == 1 #800
+        t = (n - 1) * dt * 1000
+        t = round(t, digits = 2)
+        # Capture every no_afrth frame
+        if n % no_afr == 0 || n == 1 #800
             for k in 1:nop
                 i, j = coord_to_index(coords[k,:], step_size)
                 Z[i,j] = abs2(psi[k]) # ||^2 value of psi
@@ -397,9 +397,9 @@ function animated_solution(coords, nop, psi_zero, time, A, B, lengthr, dt, M, bo
             # Plotting variable
             p = plot(
                 surface(xg, yg, Z, # Surface for 3d plot
-                    colormap = :viridis, # Matlab colormap
+                    colormap = :viridis, # Matlab colormap viridis
                     colorbar = true, # Colorbar at the right to see at values
-                    title = "Wavefunction |Ψ|² at t = $(round(t, digits=3))",# Printing time as well
+                    title = "Electron wavefunction |Ψ|² at t = $(round(t, digits=3)) femtoseconds",# Printing time as well
                     xlabel="x", ylabel="y", zlabel="|ψ(x, y)|²",
                     zlim = (0, global_max),
                     xlim = extrema(xg),# Extremes for x, y and the colorbar
@@ -430,7 +430,7 @@ function animated_solution(coords, nop, psi_zero, time, A, B, lengthr, dt, M, bo
 
     # Printing energy level
     Energy = real(psi_0' * tempo * psi_0)
-    println("Energy of closed system is: ", Energy)
+    println("Energy of closed system is: $Energy eV")
     return anim
 end
 
