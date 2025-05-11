@@ -15,7 +15,7 @@ sigma = 0.15
 y0 =  - 0.5
 x0 = - 0.5
 ky =  0.0 # + goes to the negative direction 
-kx = -20.0 #- 5.0
+kx = -20.0 # - 5.0
 
 # Create mesh and extract parameters
 mesh = Functions.grid(domain, max_length)
@@ -26,41 +26,34 @@ nop = mesh[4]
 boundary_nodes = mesh[5]
 step_size = mesh[6]
 lengthr = mesh[7]
-dt = 1e-6#step_size^2 / 4 # Time step dt<(dx)^2 for results
+dt = 1e-6 # Time step dt<(dx)^2 for optimal results for ex step_size^2 / 4 
 
 # Potential function
-V_flag = 3 # Potential V flag
-V0 = 7# Only needed for flags>1 7eV
-x_0 = 0.0
+V_flag = 3 # Potential V flag, 1 = box, 2 = box with circle barrier, 3 = box with circle well
+V0 = 7 # Only needed for flags>1 is in eV
+x_0 = 0.0 # Circle parameters
 y_0 = - 0.5
 r_0 = 0.5
 V_potential_func = Functions.V_function(V_flag, V0, x_0, y_0, r_0)
-
-# Create grid ranges
-xg = range(domain_min, -domain_min, step=step_size)
-yg = range(domain_min, -domain_min, step=step_size)
 
 # Get matrices
 matrices = Functions.fem_matrices(V_potential_func, dt, mesh...)
 
 println("Number of elements: ", noe)
-println("Time step: ", dt) 
-# Initialize Z and F matrices
-Z = fill(NaN, lengthr, lengthr) # Fill with NaN so that no space is occupied
-F = fill(NaN, lengthr, lengthr)
-# Define wavefunction and its real part
+println("Time step: ", dt)
+
+# Create wavefunction
 psi_0(x, y) = Functions.wavefunction(x, y; x0, y0, sigma, kx, ky)
 
 # Currently commenting out lines i dont need to test my script!
 
-
-# Save as mp4
+#= Save as mp4
 anim = Functions.animated_solution(coords, nop, psi_0, time, matrices..., 17000, 100)
-mp4(anim, "Animations/Electron/electron_x_potential well_7eV.mp4", fps=15)#infinite_potential_well_2
-println("Done")
+mp4(anim, "Animations/Electron/electron_x_potential well_7eV.mp4", fps=15)
+println("Done")=#
 
 
-#= Create two plots for testing
+# Create two plots for testing
 psi = Functions.solution(coords, nop, psi_0, time, matrices...)
 #=psi_final = abs2.(psi[1])
 psi_initial = abs2.(psi[2])
@@ -95,4 +88,4 @@ p1 = surface(xg, yg, Z,
         colorbar=true,
         colorscale="Viridis",
         showscale=true)
-display(p1)=#=#
+display(p1)=#

@@ -263,7 +263,7 @@ function wavefunction(x, y ; x0, y0, sigma, kx::Float64, ky::Float64)
     plane_wave = exp(-im * (kx * x + ky * y))
     return gaussian * plane_wave
 end
-# Creating function for getting solution from Ax=b where A is A,x is ψ(n+1) and b = B*ψn
+# Creating function for getting solution from Ax=b where A is A,x is ψ(n+1) and b = B*ψn, also to test solvers etc
 function solution(coords, nop, psi_zero, time, A, B, lengthr, dt, M, boundary_nodes, tempo, step_size)
     
     # n steps of time
@@ -297,30 +297,27 @@ function solution(coords, nop, psi_zero, time, A, B, lengthr, dt, M, boundary_no
 
     # Initialising solution
     psi = similar(psi_0)
-    A_LU = lu(A)#=
+    A_LU = lu(A)
     t_start = Base.time()
     # Time stepping loop
-    for n = 1:1000#n_steps
+    for n = 1:1
 
         # Solve psi
-        #psi = A_LU \ (B * psi_0)
         psi = bicgstab_vic(A, B * psi_0, 1e-10, 150)
         #println(sum(psi'*psi*step_size^2)) # Checking if integral stays the same
 
         # Asigning value to psi_0
         psi_0 = psi
 
-    t_end
-    t_end = Base.time()=#
+    end
+    t_end = Base.time()
     t_start1 = Base.time()
     # With \
     psi_0 = temp
-    for n = 1:1#n_steps
+    for n = 1:1
 
         # Solve psi
         psi = A_LU \ (B * psi_0)
-        #psi = bicgstab_vic(A, B * psi_0, 1e-10, 150)
-        #println(sum(psi'*psi*step_size^2)) # Checking if integral stays the same
 
         # Asigning value to psi_0
         psi_0 = psi
@@ -332,11 +329,11 @@ function solution(coords, nop, psi_zero, time, A, B, lengthr, dt, M, boundary_no
     final_E = real(psi_0' * tempo * psi_0)
     println("Energy: $final_E eV")
 
-    #time_ = t_end - t_start
-    #println("Time elapsed using solver : ", time_)
+    time_ = t_end - t_start
+    println("Time elapsed using solver : $time_ seconds")
 
     time__ = t_end1 - t_start1
-    println("Time elapsed using backslash : ", time__)
+    println("Time elapsed using backslash : $time__ seconds")
     return 1#psi, temp # return psi and the initial state 1 #
 end
 
@@ -543,5 +540,7 @@ function bicgstab_vic(A, b, tol, Nmax)
     end
     return x
 end
-
+function domain_decomposition()
+    
+end
 end # Module end
