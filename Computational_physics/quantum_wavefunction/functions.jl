@@ -133,6 +133,7 @@ function fem_matrices(V_potential_func, dt, coords::Matrix{Float64}, l2g::Matrix
     # a closed system. If an open system would be simulated, the matrix p would be needed as well, whichs contains the neuman and robin coefficients
     println("Creating F.E.M matrices...")
 
+    time0 = Base.time()
     # Shape/basis functions for integration
     N = [
         (ksi,eta) -> 1/4 * (1 - ksi) * (1 - eta),# N1
@@ -267,7 +268,13 @@ function fem_matrices(V_potential_func, dt, coords::Matrix{Float64}, l2g::Matrix
     # Matrices A and B for RHS and LHS
     A = H + M
     B = M - H
-    
+
+    time1 = Base.time()
+
+    time = time1 - time0
+    time = round(time, digits = 2)
+    println("Finished creating matrices from $noe elements in $time seconds")
+
     # Now our system looks like this: Aψ(n+1) = Βψn, almost ready for the solution with crank nicolson
     return A, B, lengthr, dt, boundary_nodes, tempo, step_size
 end
@@ -313,6 +320,8 @@ function solution(coords, nop, psi_zero, time, A, B, lengthr, dt, boundary_nodes
     # Initialising solution
     psi = similar(psi_0)
     A_LU = lu(A)
+    iterations = 300
+    println("Domain decomposition method using $overlaps overlaps")
 
     # Time stepping loop
 
@@ -320,7 +329,7 @@ function solution(coords, nop, psi_zero, time, A, B, lengthr, dt, boundary_nodes
     t_start1 = Base.time()
 
     # Solving with \
-    for n = 1:1
+    for n = 1:iterations
 
         # Solve psi
         psi = A_LU \ (B * psi_0)
@@ -336,7 +345,7 @@ function solution(coords, nop, psi_zero, time, A, B, lengthr, dt, boundary_nodes
 
     t_start = Base.time()
     
-    for n = 1:1
+    for n = 1:iterations
 
         # Solve psi
         #psi = bicgstab_vic(A, B * psi_0, 1e-10, 150) # Bicgstab alone
@@ -355,9 +364,11 @@ function solution(coords, nop, psi_zero, time, A, B, lengthr, dt, boundary_nodes
     println("Energy: $final_E eV")
 
     time_ = t_end - t_start
+    time_ = round(time_, digits = 4)
     println("Time elapsed using solver : $time_ seconds")
 
     time__ = t_end1 - t_start1
+    time__ = round(time__, digits = 4)
     println("Time elapsed using backslash : $time__ seconds")
     return psi, temp # return psi and the initial state 1 #
 end
@@ -366,7 +377,7 @@ end
 function animated_solution(coords, nop, psi_zero, time, A, B, lengthr, dt, boundary_nodes, tempo, step_size, no_fr, no_afr)
     
     println("Iterating with Crank-Nicolson...")
-
+    time0 = Base.time()
     # Initialize psi_0 as a 1D vector with a solution at each point so "nop"
     psi_0 = Vector{ComplexF64}(undef, nop)
 
@@ -436,11 +447,16 @@ function animated_solution(coords, nop, psi_zero, time, A, B, lengthr, dt, bound
         end
         psi_0 = psi # Ψ0 = Ψ to continue iterative method
     end
+    time1 = Base.time()
+    time = time1 - time0
+    time = round(time, digits = 2)
+
+    println("Finished iterating $no_fr frames in $time seconds")
 
     lengthf = length(frames)
     # Saving animation into variable
     println("Creating animation...")
-
+    time0 = Base.time()
     anim = @animate for (i, frame) in enumerate(frames)
         plot(frame)  # Plot the current frame
         println("Progress: $i/$lengthf")  # Show current/total
@@ -449,6 +465,10 @@ function animated_solution(coords, nop, psi_zero, time, A, B, lengthr, dt, bound
     # Printing energy level
     Energy = real(psi_0' * tempo * psi_0)
     println("Energy of closed system is: $Energy eV")
+    time1 = Base.time()
+    time = time1 - time0
+    time = round(time, digits = 2)
+    println("Animation created in $time seconds")
     return anim
 end
 
@@ -615,7 +635,7 @@ function domain_decomposition(A, b, s1, s2, s3, step_size, nx_half, ny_half, ove
 
     # Same for s3 
     c = zeros(Int, length(vec(inner3)), 1)
-    index = 2 # skips first collumn
+    index = overlap + 1 # skips first collumn
     indexx = 1 
     for k = 1:size(inner3)[1]# Row loop
         for i = 1: size(inner3)[2]
@@ -623,9 +643,9 @@ function domain_decomposition(A, b, s1, s2, s3, step_size, nx_half, ny_half, ove
             index += 1
             indexx +=1
         end
-        index += 1 # skips first collumn
+        index += overlap # skips first collumn
     end
-
+    
     # Max iterations and tolerance
     Nmax = 500;
     tol = 10^-10;
@@ -636,7 +656,7 @@ function domain_decomposition(A, b, s1, s2, s3, step_size, nx_half, ny_half, ove
 
         # Convergence criterion and fail print
         if(norm(r)/norm(b)<tol)
-            println("Converged in $i iterations with residual ", norm(r)/norm(b))
+            #println("Converged in $i iterations with residual ", norm(r)/norm(b))
             break
         end
         if i == Nmax

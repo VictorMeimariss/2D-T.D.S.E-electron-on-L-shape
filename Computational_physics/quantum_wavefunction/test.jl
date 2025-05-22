@@ -8,7 +8,7 @@ import .Functions
 domain = (-1, 1) # In nanometers
 time = (0, 1)
 domain_min = domain[1]
-max_length = 0.05
+max_length = 0.025
 
 # Wavefunction parameters 
 sigma = 0.15
@@ -64,9 +64,10 @@ anim = Functions.animated_solution(coords, nop, psi_0, time, matrices..., 17000,
 mp4(anim, "Animations/Electron/electron_x_potential barrier_15eV.mp4", fps=15)
 println("Done")=#
 
+overlaps = nx_half - 1 # For domain decomposition
 
 # Create two plots for testing
-psi = Functions.solution(coords, nop, psi_0, time, matrices..., a, b, c, nx_half, ny_half)
+psi = Functions.solution(coords, nop, psi_0, time, matrices..., a, b, c, nx_half, ny_half, overlaps)
 psi_final = abs2.(psi[1])
 psi_initial = abs2.(psi[2])
 
