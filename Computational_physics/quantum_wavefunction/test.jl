@@ -8,9 +8,9 @@ import .Functions
 domain = (-1, 1) # In nanometers
 time = (0, 1)
 domain_min = domain[1]
-max_length = 0.025
+max_length = 0.05
 
-# Wavefunction parameters
+# Wavefunction parameters 
 sigma = 0.15
 y0 =  - 0.5
 x0 = - 0.5
@@ -26,21 +26,30 @@ nop = mesh[4]
 boundary_nodes = mesh[5]
 step_size = mesh[6]
 lengthr = mesh[7]
+
 dt = 1e-6 # Time step dt<(dx)^2 for optimal results for ex step_size^2 / 4 
 
+
+# Domain decomposition matrices 
+a = mesh[8]
+b = mesh[9]
+c = mesh[10]
+nx_half = mesh[11]
+ny_half = mesh[12]
+
 # Potential function
-V_flag = 3 # Potential V flag, 1 = box, 2 = box with circle barrier, 3 = box with circle well
-V0 = 7 # Only needed for flags>1 is in eV
+V_flag = 2 # Potential V flag, 1 = box, 2 = box with circle barrier, 3 = box with circle well
+V0 = 15 # Only needed for flags>1 is in eV
 x_0 = 0.0 # Circle parameters
-y_0 = - 0.5
+y_0 = - 0.25
 r_0 = 0.5
 V_potential_func = Functions.V_function(V_flag, V0, x_0, y_0, r_0)
 
 # Get matrices
-matrices = Functions.fem_matrices(V_potential_func, dt, mesh...)
+matrices = Functions.fem_matrices(V_potential_func, dt, coords, l2g, noe, boundary_nodes, step_size, lengthr)
 
-println("Number of elements: ", noe)
-println("Time step: ", dt)
+#println("Number of elements: ", noe)
+#println("Time step: $dt picoseconds")
 
 # Create wavefunction
 psi_0(x, y) = Functions.wavefunction(x, y; x0, y0, sigma, kx, ky)
@@ -48,14 +57,17 @@ psi_0(x, y) = Functions.wavefunction(x, y; x0, y0, sigma, kx, ky)
 # Currently commenting out lines i dont need to test my script!
 
 #= Save as mp4
-anim = Functions.animated_solution(coords, nop, psi_0, time, matrices..., 17000, 100)
-mp4(anim, "Animations/Electron/electron_x_potential well_7eV.mp4", fps=15)
+# n steps of time
+time_domain = time[2] - time[1]
+n_steps = Int128(time_domain ÷ dt) + 1
+anim = Functions.animated_solution(coords, nop, psi_0, time, matrices..., 17000, 100)# or n_steps
+mp4(anim, "Animations/Electron/electron_x_potential barrier_15eV.mp4", fps=15)
 println("Done")=#
 
 
 # Create two plots for testing
-psi = Functions.solution(coords, nop, psi_0, time, matrices...)
-#=psi_final = abs2.(psi[1])
+psi = Functions.solution(coords, nop, psi_0, time, matrices..., a, b, c, nx_half, ny_half)
+psi_final = abs2.(psi[1])
 psi_initial = abs2.(psi[2])
 
 # Define grid ranges and Z
@@ -88,4 +100,4 @@ p1 = surface(xg, yg, Z,
         colorbar=true,
         colorscale="Viridis",
         showscale=true)
-display(p1)=#
+display(p1)

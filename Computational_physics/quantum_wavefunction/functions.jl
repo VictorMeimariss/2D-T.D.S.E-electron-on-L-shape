@@ -43,15 +43,22 @@ function grid(domain::Tuple{Real, Real}, max_length::Float64) # num_of_squares_x
 
     # Number of elements and nodes
     noe = Int((num_of_squares_y * num_of_squares_x) * 0.75) # Number of elements
-    nop = num_of_squares_x + num_of_squares_y + noe + 1 # Number of nodes
+    nop = num_of_squares_x + num_of_squares_y + noe + 1# Number of nodes
 
+    nx_half = (num_of_squares_x ÷ 2) + 1
+    ny_half = (num_of_squares_y ÷ 2) + 1
     # a->top left square
-    a = reshape(1:((num_of_squares_x ÷ 2) + 1) * ((num_of_squares_y ÷ 2) + 1), (num_of_squares_x ÷ 2) + 1, (num_of_squares_y ÷ 2) + 1)
+    a = reshape(1:nx_half * ny_half, nx_half, ny_half)
     a = transpose(a)
     
-    # b->bottom big rectangle,b and a overlap on a's last line, for convinience in when creating the l2g matrix
+    # b->bottom big rectnagle
     b = reshape(a[end,1]:nop, num_of_squares_x + 1, (num_of_squares_y ÷ 2) + 1)
     b = transpose(b)
+
+    # c->bottom right square
+    c = b[:, nx_half:end]
+    # b -> becomes bottom left square
+    b = b[:, 1:nx_half]
 
     # Keep boundary nodes for boundary conditions in the solution later without any order 
     boundary_nodes = Set{Int}() # Initialise empty set for boundary nodes for fast look ups to detect number of boundary nodes in each element
@@ -60,8 +67,9 @@ function grid(domain::Tuple{Real, Real}, max_length::Float64) # num_of_squares_x
     union!(boundary_nodes, @view a[:, end])
     union!(boundary_nodes, @view b[:, 1])
     union!(boundary_nodes, @view b[end, :])
-    union!(boundary_nodes, @view b[:, end])
-    union!(boundary_nodes, @view b[1,((num_of_squares_x ÷ 2) + 1) :end])
+    union!(boundary_nodes, @view c[1, :])
+    union!(boundary_nodes, @view c[end, :])
+    union!(boundary_nodes, @view c[:, end])
 
     # Generate coordinate range
     x = range(domain[1], domain[2], num_of_squares_x + 1)# need boundary nodes for dirichlet, elements with two sides with boundary nodes and elem with 1 side
@@ -98,20 +106,27 @@ function grid(domain::Tuple{Real, Real}, max_length::Float64) # num_of_squares_x
             index +=1
         end
     end
-    # For bottom rectangle
+    # For bottom left square
     for i = 1:(num_of_squares_y ÷ 2)
-        @inbounds for j = 1: num_of_squares_x
+        @inbounds for j = 1:(num_of_squares_x  ÷ 2)
             l2g[index, :] = [b[i + 1, j], b[i + 1, j + 1], b[i, j + 1], b[i, j]]
             index += 1
         end
     end
-    return coords, l2g ,noe, nop, boundary_nodes, max_length, lengthr
+    # For bottom right square overlapping elements
+    for i = 1:(num_of_squares_y ÷ 2)
+        @inbounds for j = 1:(num_of_squares_x  ÷ 2)
+            l2g[index, :] = [c[i + 1, j], c[i + 1, j + 1], c[i, j + 1], c[i, j]]
+            index += 1
+        end
+    end
+    return coords, l2g, noe, nop, boundary_nodes, max_length, lengthr, a, b, c, nx_half, ny_half
 end
 
 #= Creating function which will be returning the matrices A and B containing the Hamiltonian and Mass matrices using F.E.M
     A and B are the LHS and RHS matrices used in the crank nicolson solution to provide wavefunction solution
 =#
-function fem_matrices(V_potential_func, dt, coords::Matrix{Float64}, l2g::Matrix{Int64}, noe::Int64, nop::Int64, boundary_nodes::Set, step_size, lengthr)# step _size is here because its needed for plotting
+function fem_matrices(V_potential_func, dt, coords::Matrix{Float64}, l2g::Matrix{Int64}, noe::Int64, boundary_nodes::Set, step_size, lengthr)# step _size is here because its needed for plotting
     
     # For this script I will assume Neuman and robin coefficients to be zero and then might integrate them for certain problems like scattering
     # I will also assume Dirichlet boundary conditions where the probability ψ is zero in the boundaries(Potential V = infinite in the boundaries), as in this general function I want to model
@@ -254,7 +269,7 @@ function fem_matrices(V_potential_func, dt, coords::Matrix{Float64}, l2g::Matrix
     B = M - H
     
     # Now our system looks like this: Aψ(n+1) = Βψn, almost ready for the solution with crank nicolson
-    return A, B, lengthr, dt, M, boundary_nodes, tempo, step_size
+    return A, B, lengthr, dt, boundary_nodes, tempo, step_size
 end
 
 # Creating inital wavefunction equation Ψ0 to solve with function solution
@@ -264,7 +279,7 @@ function wavefunction(x, y ; x0, y0, sigma, kx::Float64, ky::Float64)
     return gaussian * plane_wave
 end
 # Creating function for getting solution from Ax=b where A is A,x is ψ(n+1) and b = B*ψn, also to test solvers etc
-function solution(coords, nop, psi_zero, time, A, B, lengthr, dt, M, boundary_nodes, tempo, step_size)
+function solution(coords, nop, psi_zero, time, A, B, lengthr, dt, boundary_nodes, tempo, step_size, a, b, c, nx_half, ny_half, overlaps)
     
     # n steps of time
     time_domain = time[2] - time[1]
@@ -298,22 +313,13 @@ function solution(coords, nop, psi_zero, time, A, B, lengthr, dt, M, boundary_no
     # Initialising solution
     psi = similar(psi_0)
     A_LU = lu(A)
-    t_start = Base.time()
+
     # Time stepping loop
-    for n = 1:1
 
-        # Solve psi
-        psi = bicgstab_vic(A, B * psi_0, 1e-10, 150)
-        #println(sum(psi'*psi*step_size^2)) # Checking if integral stays the same
-
-        # Asigning value to psi_0
-        psi_0 = psi
-
-    end
-    t_end = Base.time()
+    # Keeping track of time for optimization
     t_start1 = Base.time()
-    # With \
-    psi_0 = temp
+
+    # Solving with \
     for n = 1:1
 
         # Solve psi
@@ -324,6 +330,25 @@ function solution(coords, nop, psi_zero, time, A, B, lengthr, dt, M, boundary_no
 
     end
     t_end1 = Base.time()
+
+    # Reusing old solution to test my own solver
+    psi_0 = temp
+
+    t_start = Base.time()
+    
+    for n = 1:1
+
+        # Solve psi
+        #psi = bicgstab_vic(A, B * psi_0, 1e-10, 150) # Bicgstab alone
+        psi = domain_decomposition(A, B * psi_0, a, b, c, step_size, nx_half, ny_half, overlaps) # Bicgstab with domain decomposition as a preconditioner
+        #println(sum(psi'*psi*step_size^2)) # Checking if integral stays the same
+
+        # Asigning value to psi_0
+        psi_0 = psi
+
+    end
+    t_end = Base.time()
+    
     # Final calculations
 
     final_E = real(psi_0' * tempo * psi_0)
@@ -334,17 +359,13 @@ function solution(coords, nop, psi_zero, time, A, B, lengthr, dt, M, boundary_no
 
     time__ = t_end1 - t_start1
     println("Time elapsed using backslash : $time__ seconds")
-    return 1#psi, temp # return psi and the initial state 1 #
+    return psi, temp # return psi and the initial state 1 #
 end
 
 # Creating animated solution over desired time
-function animated_solution(coords, nop, psi_zero, time, A, B, lengthr, dt, M, boundary_nodes, tempo, step_size, no_fr, no_afr)
+function animated_solution(coords, nop, psi_zero, time, A, B, lengthr, dt, boundary_nodes, tempo, step_size, no_fr, no_afr)
     
     println("Iterating with Crank-Nicolson...")
-
-    # n steps of time
-    time_domain = time[2] - time[1]
-    n_steps = Int128(time_domain ÷ dt) + 1
 
     # Initialize psi_0 as a 1D vector with a solution at each point so "nop"
     psi_0 = Vector{ComplexF64}(undef, nop)
@@ -367,7 +388,7 @@ function animated_solution(coords, nop, psi_zero, time, A, B, lengthr, dt, M, bo
     xg = yg = range(-1, 1, step = step_size)
 
     # Calculate global maximum for consistent scaling in plotting
-    global_max = maximum(abs2.(psi_0)) * 1.6
+    global_max = maximum(abs2.(psi_0)) * 1.8
 
     # Preconditioning
     A_LU = lu(A)
@@ -379,7 +400,7 @@ function animated_solution(coords, nop, psi_zero, time, A, B, lengthr, dt, M, bo
     # Time evolution loop with Crank Nicolson
     for n in 1:no_fr # Produce
 
-        # Solving psi with solver
+        # Solving psi with , right now \
         psi = A_LU \ (B * psi_0)
 
         # Time variable for plotting
@@ -439,7 +460,7 @@ function coord_to_index(coord, step_size)
 end
 
 # Creating 2 dimensional gauss_quadrature function to use to solve the integrals needed in FEM integrating from -1 to 1
-function gauss_quad_2D(funct, n)# omada, mission planner, api, 
+function gauss_quad_2D(funct, n) 
     if n == 2
         ksi = (-0.5773502692, 0.5773502692)
         eta = (-0.5773502692, 0.5773502692)
@@ -500,7 +521,7 @@ function bicgstab_vic(A, b, tol, Nmax)
     # b Norm
     norm_b = norm(b)
 
-    # Using preconditioner, as a test using ilu, but right now its way too slow
+    # Using preconditioner, as a test using ilu
     K = ilu(A, τ = 1e-6)
 
     for i in 1:Nmax
@@ -540,7 +561,106 @@ function bicgstab_vic(A, b, tol, Nmax)
     end
     return x
 end
-function domain_decomposition()
+
+# Function for domain decomposition method
+function domain_decomposition(A, b, s1, s2, s3, step_size, nx_half, ny_half, overlap) # Matrix A and sub matrices from grid A, b, 
     
+    # error handling
+    if overlap > nx_half - 1 || overlap > ny_half - 1 # n_half = nx / 2 + 1, thats why -1 is there
+        println("Overlap needs to  less than / or equal to n / 2")
+        return 0
+    end
+
+    # Getting size of A
+    n = size(A, 1)
+
+    # Preallocate solution and residual vectors
+    x = zeros(ComplexF64, n, 1)
+    r = similar(b)
+
+    # s1, s2, s3 modification to get inner and boundary nodes, inner2 = s2
+    inner1 = s1[1: end - 1, :] # Last line is the boundary line same as first line of s2
+    inner3 = s3[:, 2:end] # First collumn is the boundary collumn aligning with s2
+
+    # Overlap matrices
+    over1 = s2[1:overlap, :]
+    over21 = inner1[end - overlap + 1:end, :]
+    over23 = inner3[:, 1:overlap]
+    over3 = s2[:, end - overlap + 1:end]
+
+    # Indices for submatrices
+    inds1 = vec(transpose(vcat(inner1, over1)))
+    inds2 = vec(hcat(transpose(vcat(over21, s2)), over23))
+    inds2 = sort(inds2)
+    inds3 = vec(transpose(hcat(over3, inner3)))
+
+    # Sumbatrices of A
+    A1 = A[inds1, inds1]
+    A2 = A[inds2, inds2]
+    A3 = A[inds3, inds3]
+
+    # Creating index matrix that gets wanted solution from x2 after solving, which is where s2 lies, meaning, we dont want the solution
+    # that is on over21 and over23 but on top of s2
+    d = zeros(Int, length(vec(s2)), 1)
+    index = length(vec(over21)) + 1 # index starts from where over21 ends, also used to give value to d
+    indexx = 1
+    for k = 1:size(s2)[1]# Row loop
+        for i = 1: size(s2)[2]
+            d[indexx] = index
+            index += 1
+            indexx +=1
+        end
+        index +=  size(over23)[2] # skip over23
+    end
+
+    # Same for s3 
+    c = zeros(Int, length(vec(inner3)), 1)
+    index = 2 # skips first collumn
+    indexx = 1 
+    for k = 1:size(inner3)[1]# Row loop
+        for i = 1: size(inner3)[2]
+            c[indexx] = index
+            index += 1
+            indexx +=1
+        end
+        index += 1 # skips first collumn
+    end
+
+    # Max iterations and tolerance
+    Nmax = 500;
+    tol = 10^-10;
+    
+    for i = 1:Nmax
+        # Residual
+        r = b - A * x;
+
+        # Convergence criterion and fail print
+        if(norm(r)/norm(b)<tol)
+            println("Converged in $i iterations with residual ", norm(r)/norm(b))
+            break
+        end
+        if i == Nmax
+            println("Reached maximum iterations without convergence")
+        end
+
+        # Solve all systems with residual in selected indices
+
+        # Solve first system
+        x1 = bicgstab_vic(A1, r[inds1], 10e-10, 150)
+        x1 = x1[1:(length(inner1))] # Stays the same since indexing is the same
+        # Solve second system
+        x2 = bicgstab_vic(A2, r[inds2], 10e-10, 150)
+        x2 = x2[d]
+
+        # Solve the third system
+        x3 = bicgstab_vic(A3, r[inds3], 10e-10, 150)
+        x3 = x3[c]
+
+        # Update solution
+        x[sort!(vec(inner1))] += x1
+        x[sort!(vec(s2))] += x2
+        x[sort!(vec(inner3))] += x3
+    end
+    return x
 end
 end # Module end
