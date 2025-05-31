@@ -3,8 +3,8 @@ explaining the numbers in my report. =#
 module Functions
 using SparseArrays, LinearAlgebra, Arpack, Plots, SparseArrays, IncompleteLU
 
-#plotlyjs() # Enable PlotlyJS backend for interactivity
-gr() # Backend for animations change to this for stable animations as well as low memory images when testing
+plotlyjs() # Enable PlotlyJS backend for interactivity
+#gr() # Backend for animations change to this for stable animations as well as low memory images when testing
 
 # Electron constants for my domain in nanometers and femtoseconds
 const h_bar = 0.65821220e-3 # h_bar actual value in eV * ps  
@@ -643,17 +643,6 @@ function domain_decomposition(A, b, s1, s2, s3, nx_half, ny_half, overlap, flag)
     over23 = inner3[:, 1:overlap]
     over3 = s2[:, end - overlap + 1:end]
 
-    # Getting sizes for multigrid
-
-    nx_1 = size(inner1)[2]
-    ny_1 = size(inner1)[1] + overlap
-
-    nx_2 = size(s2)[1] + overlap
-    ny_2 = nx_2
-
-    nx_3 = size(inner3)[2] + overlap
-    ny_3 = size(inner3)[1]
-
     # Indices for submatrices
     inds1 = vec(transpose(vcat(inner1, over1)))
     inds2 = vec(hcat(transpose(vcat(over21, s2)), over23))
@@ -697,7 +686,7 @@ function domain_decomposition(A, b, s1, s2, s3, nx_half, ny_half, overlap, flag)
     Nmax = 200;
     tolDD = 10e-10
     tolMG = 10e-4
-    tolBic = 10e-4
+    tolBic = 10e-5
     it = 20
 
     if flag == 1 # Solving with bicgstab
@@ -735,6 +724,33 @@ function domain_decomposition(A, b, s1, s2, s3, nx_half, ny_half, overlap, flag)
             x[sort!(vec(inner3))] += x3
         end
     elseif flag == 2 # Using multigrid and bicgstab as a smoother
+
+        # Parameters
+        n1 = 12
+        n2 = 8
+
+        # Getting sizes for multigrid
+
+        nx_1 = size(inner1)[2]
+        ny_1 = size(inner1)[1] + overlap
+
+        nx_2 = size(s2)[1] + overlap
+        ny_2 = nx_2
+
+        nx_3 = size(inner3)[2] + overlap
+        ny_3 = size(inner3)[1]
+
+        time_start = Base.time()
+        # Preallocating matrices for multigrid
+        A1_, R1, P1, levels1 = multigrid_vic_hierarchy(nx_1, ny_1, overlap, A1)
+        A2_, R2, P2, levels2 = multigrid_vic_hierarchy(nx_2, ny_2, overlap, A2, 2)
+        A3_, R3, P3, levels3 = multigrid_vic_hierarchy(nx_3, ny_3, overlap, A3)
+
+        time_end = Base.time()
+        time = time_end - time_start
+        time = round(time, digits = 4)
+        println("Time elapsed creating matrices for multigrid before loop:", time)
+
         for i = 1:Nmax
             # Residual
             r = b - A * x;
@@ -752,15 +768,15 @@ function domain_decomposition(A, b, s1, s2, s3, nx_half, ny_half, overlap, flag)
             
             # Solve first system
             
-            x1 = multigrid_vic(nx_1, ny_1, overlap, A1, r[inds1], 3, 2, tolMG, 1)
+            x1 = multigrid_vic(A1_, R1, P1, levels1, r[inds1], n1, n2, tolMG)
             x1 = x1[1:(length(inner1))] # Stays the same since indexing is the same
 
             # Solve second system
-            x2 = multigrid_vic(nx_2, ny_2, overlap, A2, r[inds2], 3, 2, tolMG, 2) 
+            x2 = multigrid_vic(A2_, R2, P2, levels2, r[inds2], n1, n2, tolMG)
             x2 = x2[d]
 
             # Solve the third system
-            x3 = multigrid_vic(nx_3, ny_3, overlap, A3, r[inds3], 3, 2, tolMG, 1) 
+            x3 = multigrid_vic(A3_, R3, P3, levels3, r[inds3], n1, n2, tolMG)
             x3 = x3[c]
             
             # Update solution
@@ -771,17 +787,12 @@ function domain_decomposition(A, b, s1, s2, s3, nx_half, ny_half, overlap, flag)
     end
     return x
 end
-
-# Creating multigrid function with V cycles for my 2D grid, as it the most efficient, to use as preconditioner along with domain decomposition
-#so this multigrid will be tailored for rectangle grids (not L shape since we use decomposition)
-function multigrid_vic(nox, noy, overlap, A1, B, n1, n2, tol, flag = 1)
+function multigrid_vic_hierarchy(nox, noy, overlap, A1, flag = 1)
     
     #  First I will be creating the restriction and prolongation matrices by using the weighted average of nine fine grid values to create
     # for non_f = fine grid number of nodes in a direction, to find the coarse nodes non_c = floor((non_f - 1) / 2) + 1 so that if the interval number is odd it becomes even
     # example 5x x 6y nodes -> 4x x 5y intervals, non_cx = 3 and non_cy = 3 also, containing the information of all the previous finer nodes
-    
-    # Parameters
-    Nmax = 50
+
 
     # Getting number of nodes for each coarser level
 
@@ -829,7 +840,6 @@ function multigrid_vic(nox, noy, overlap, A1, B, n1, n2, tol, flag = 1)
     R = Vector{SparseMatrixCSC{Float64, Int}}(undef, levels - 1) # Vectors of sparse matrices
     P = Vector{SparseMatrixCSC{Float64, Int}}(undef, levels - 1)
 
-    #time_start2 = Base.time()
     for i = 2:levels
         if flag == 1 # For A1 and A3 which are rectangles
             R[i - 1] = build_Restriction_matrix(flag, nx[i - 1], nx[i], ny[i - 1], ny[i])
@@ -839,13 +849,9 @@ function multigrid_vic(nox, noy, overlap, A1, B, n1, n2, tol, flag = 1)
         # Create prolongation matrix from the restriction
         P[i - 1] = 4 * R[i - 1]'
     end 
-    #time_end2 = Base.time()
-
-    # Inniate A, b, x, D vectors
+    # Inniate A
 
     A = Vector{SparseMatrixCSC{ComplexF64, Int}}(undef, levels) # Vector of sparse matrices
-    b = Vector{Vector{ComplexF64}}(undef, levels)
-    x = similar(b)
 
     # Build A's top level (finest)
     A[1] = A1
@@ -855,11 +861,23 @@ function multigrid_vic(nox, noy, overlap, A1, B, n1, n2, tol, flag = 1)
         A[i] = R[i - 1] * A[i - 1] * P[i - 1]
     end
 
+    return A, R, P, levels
+end
+# Creating multigrid function with V cycles for my 2D grid, as it the most efficient, to use as preconditioner along with domain decomposition
+#so this multigrid will be tailored for rectangle grids (not L shape since we use decomposition)
+function multigrid_vic(A, R, P, levels, B, n1, n2, tol)
+
+    # Parameters
+    Nmax = 100
+
+    # Iniate b and x vectors 
+    b = Vector{Vector{ComplexF64}}(undef, levels)
+    x = similar(b)
+
     for i = 1: levels
         b[i] = zeros(ComplexF64, size(A[i])[1])
         x[i] = similar(b[i])
     end
-
     # Build the RHS's top level
     b[1] = B
 
@@ -867,7 +885,6 @@ function multigrid_vic(nox, noy, overlap, A1, B, n1, n2, tol, flag = 1)
     norm_b = norm(b[1])
 
     # Iterate over all levels
-    #time_start = Base.time()
     for it = 1: Nmax
         for i = 2: levels - 1
             x[i] = bicgstab_vic(A[i], b[i], 10e-10, n1)
@@ -890,15 +907,6 @@ function multigrid_vic(nox, noy, overlap, A1, B, n1, n2, tol, flag = 1)
             break;
         end
     end
-    #time_end = Base.time()
-    #time = time_end - time_start
-    #time = round(time, digits = 4)
-
-    
-    #time2 = time_end2 - time_start2
-    #time2 = round(time2, digits = 4)
-    #println("Time elapsed after loop: ", time)
-    #println("Τime elapsed for creation of matrices R and P: ", time2)
     return x[1]
 end
 
@@ -982,12 +990,12 @@ function build_Restriction_matrix(flag, nfx_bb::Int, ncx_bb::Int, nfy_bb::Int = 
     end
 
     R = sparse(I, J, V, nc_act, nf_act)
-    row_sums = sum(R, dims=2)
+    #=row_sums = sum(R, dims=2)
     for i in 1:nc_act
         if row_sums[i] != 0
             R[i, :] = R[i, :] ./ row_sums[i]
         end
-    end
+    end=#
     return R
 end
 end # Module end

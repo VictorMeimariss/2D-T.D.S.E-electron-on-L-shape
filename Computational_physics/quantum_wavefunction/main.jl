@@ -76,8 +76,7 @@ println("Done")=#
 
 # Create two plots for testing
 psi = Functions.solution(coords, nop, psi_0, time, matrices..., a, b, c, nx_half, ny_half, overlaps, iterations)
-return 0
-#=
+#
 psi_final = abs2.(psi[1])
 psi_initial = abs2.(psi[2])
 
@@ -111,4 +110,5 @@ p1 = surface(xg, yg, Z,
         colorbar=true,
         colorscale="Viridis",
         showscale=true)
-display(p1)=#
+display(p1)
+return 0
