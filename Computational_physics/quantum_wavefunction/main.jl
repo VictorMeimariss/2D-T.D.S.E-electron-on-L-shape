@@ -11,8 +11,8 @@ import .Functions
 domain = (-1, 1) # In nanometers
 time = (0, 1)
 domain_min = domain[1]
-max_length = 0.5
-overlaps = 1 # For domain decomposition
+max_length = 0.025
+overlaps = 20 # For domain decomposition
 iterations = 1 #3000 #crank nicolson frames
 
 # Wavefunction parameters 
@@ -61,7 +61,7 @@ psi_0(x, y) = Functions.wavefunction(x, y; x0, y0, sigma, kx, ky)
 
 # Currently commenting out lines i dont need to test my script!
 
-# Save as mp4
+#= Save as mp4
 # n steps of time
 time_domain = time[2] - time[1]
 n_steps = Int128(time_domain ÷ dt) + 1
@@ -71,13 +71,13 @@ frame_inter = 1#100
 
 anim = Functions.animated_solution(coords, nop, psi_0, time, matrices..., no_frames, frame_inter)# or n_steps
 mp4(anim, "Animations/Electron/test.mp4", fps=15)
-println("Done")
+println("Done")=#
 
 
-#= Create two plots for testing
+# Create two plots for testing
 psi = Functions.solution(coords, nop, psi_0, time, matrices..., a, b, c, nx_half, ny_half, overlaps, iterations)
 return 0
-
+#=
 psi_final = abs2.(psi[1])
 psi_initial = abs2.(psi[2])
 

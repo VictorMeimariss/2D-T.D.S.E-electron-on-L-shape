@@ -376,7 +376,7 @@ function solution(coords, nop, psi_zero, time, A, B, lengthr, dt, boundary_nodes
     # Reusing old solution to test solver
     psi_0 = temp
     
-    t_start = Base.time()
+    t_start4 = Base.time()
     
     for n = 1:iterations
 
@@ -387,28 +387,29 @@ function solution(coords, nop, psi_zero, time, A, B, lengthr, dt, boundary_nodes
         psi_0 = psi
 
     end
-    t_end = Base.time()
+    t_end4 = Base.time()
 
     # Final calculations
 
     final_E = real(psi_0' * tempo * psi_0)
     println("Energy: $final_E eV")
 
+    time__ = t_end1 - t_start1
+    time__ = round(time__, digits = 4)
+    println("Time elapsed using backslash : $time__ seconds")
+    
+    time_2 = t_end2 - t_start2
+    time_2 = round(time_2, digits = 4)
+    println("Time elapsed using bicgstab solver alone: $time_2 seconds")
+
     time_3 = t_end3 - t_start3
     time_3 = round(time_3, digits = 4)
     println("Time elapsed using dd and bicgstab solver : $time_3 seconds")
     
-    time_2 = t_end2 - t_start2
-    time_2 = round(time_2, digits = 4)
-    println("Time elapsed using dd, multigrid and bicgstab solver : $time_2 seconds")
+    time4 = t_end4 - t_start4
+    time4 = round(time4, digits = 4)
+    println("Time elapsed using dd, multigrid and bicgstab solver : $time4 seconds")
     
-    time_ = t_end - t_start
-    time_ = round(time_, digits = 4)
-    println("Time elapsed using bicgstab solver : $time_ seconds")
-    
-    time__ = t_end1 - t_start1
-    time__ = round(time__, digits = 4)
-    println("Time elapsed using backslash alone: $time__ seconds")
     #println("Compare norms of psi solved with backslash $(norm(temp1)) vs multigrid $(norm(psi))")
     return psi, temp # return psi and the initial state 1 #
 end
@@ -694,14 +695,18 @@ function domain_decomposition(A, b, s1, s2, s3, nx_half, ny_half, overlap, flag)
     
     # Max iterations and tolerance
     Nmax = 200;
-    tol = 10^-10;
+    tolDD = 10e-10
+    tolMG = 10e-4
+    tolBic = 10e-4
+    it = 20
+
     if flag == 1 # Solving with bicgstab
         for i = 1:Nmax
             # Residual
             r = b - A * x;
 
             # Convergence criterion and fail print
-            if(norm(r)/norm(b)<tol)
+            if(norm(r)/norm(b)<tolDD)
                 #println("Converged in $i iterations with residual ", norm(r)/norm(b))
                 break
             end
@@ -713,15 +718,15 @@ function domain_decomposition(A, b, s1, s2, s3, nx_half, ny_half, overlap, flag)
             
             # Solve first system
             
-            x1 = bicgstab_vic(A1, r[inds1], tol, 150) # multigrid_vic(nx_1, ny_1, overlap, A1, r[inds1], 3, 2, tol, 1) #
+            x1 = bicgstab_vic(A1, r[inds1], tolBic, it) # multigrid_vic(nx_1, ny_1, overlap, A1, r[inds1], 3, 2, tol, 1) #
             x1 = x1[1:(length(inner1))] # Stays the same since indexing is the same
 
             # Solve second system
-            x2 = bicgstab_vic(A2, r[inds2], tol, 150) # multigrid_vic(nx_2, ny_2, overlap, A2, r[inds2], 3, 2, tol, 2) #
+            x2 = bicgstab_vic(A2, r[inds2], tolBic, it) # multigrid_vic(nx_2, ny_2, overlap, A2, r[inds2], 3, 2, tol, 2) #
             x2 = x2[d]
 
             # Solve the third system
-            x3 = bicgstab_vic(A3, r[inds3], tol, 150) # multigrid_vic(nx_3, ny_3, overlap, A3, r[inds3], 3, 2, tol, 1) #
+            x3 = bicgstab_vic(A3, r[inds3], tolBic, it) # multigrid_vic(nx_3, ny_3, overlap, A3, r[inds3], 3, 2, tol, 1) #
             x3 = x3[c]
     
             # Update solution
@@ -735,7 +740,7 @@ function domain_decomposition(A, b, s1, s2, s3, nx_half, ny_half, overlap, flag)
             r = b - A * x;
 
             # Convergence criterion and fail print
-            if(norm(r)/norm(b)<tol)
+            if(norm(r)/norm(b)<tolDD)
                 #println("Converged in $i iterations with residual ", norm(r)/norm(b))
                 break
             end
@@ -747,15 +752,15 @@ function domain_decomposition(A, b, s1, s2, s3, nx_half, ny_half, overlap, flag)
             
             # Solve first system
             
-            x1 = multigrid_vic(nx_1, ny_1, overlap, A1, r[inds1], 3, 2, tol, 1)
+            x1 = multigrid_vic(nx_1, ny_1, overlap, A1, r[inds1], 3, 2, tolMG, 1)
             x1 = x1[1:(length(inner1))] # Stays the same since indexing is the same
 
             # Solve second system
-            x2 = multigrid_vic(nx_2, ny_2, overlap, A2, r[inds2], 3, 2, tol, 2) 
+            x2 = multigrid_vic(nx_2, ny_2, overlap, A2, r[inds2], 3, 2, tolMG, 2) 
             x2 = x2[d]
 
             # Solve the third system
-            x3 = multigrid_vic(nx_3, ny_3, overlap, A3, r[inds3], 3, 2, tol, 1) 
+            x3 = multigrid_vic(nx_3, ny_3, overlap, A3, r[inds3], 3, 2, tolMG, 1) 
             x3 = x3[c]
             
             # Update solution
@@ -774,9 +779,9 @@ function multigrid_vic(nox, noy, overlap, A1, B, n1, n2, tol, flag = 1)
     #  First I will be creating the restriction and prolongation matrices by using the weighted average of nine fine grid values to create
     # for non_f = fine grid number of nodes in a direction, to find the coarse nodes non_c = floor((non_f - 1) / 2) + 1 so that if the interval number is odd it becomes even
     # example 5x x 6y nodes -> 4x x 5y intervals, non_cx = 3 and non_cy = 3 also, containing the information of all the previous finer nodes
-
+    
     # Parameters
-    Nmax = 10
+    Nmax = 50
 
     # Getting number of nodes for each coarser level
 
@@ -794,7 +799,7 @@ function multigrid_vic(nox, noy, overlap, A1, B, n1, n2, tol, flag = 1)
         ny[i] = floor((ny[i - 1] - 1) / 2) + 1
         levels += 1
         #println("x: $(nx[i]), y: $(ny[i]) at level: $levels")
-        if nx[i] <= 4 || ny[i] <= 4
+        if nx[i] <= 3 || ny[i] <= 3
             break
         end
     end
@@ -807,9 +812,9 @@ function multigrid_vic(nox, noy, overlap, A1, B, n1, n2, tol, flag = 1)
             n_inner[i] = floor((n_inner[i - 1] - 1) / 2) + 1
             levelss += 1
             #println("Inner nodes: $(n_inner[i]) at level: $levels")
-            if nx[i] <= 4
+            if nx[i] <= 3
                 break
-            elseif n_inner[i] <= 4
+            elseif n_inner[i] <= 3
                 for j = i + 1: levels
                     n_inner[j] = n_inner[i]
                     levelss += 1
@@ -824,6 +829,7 @@ function multigrid_vic(nox, noy, overlap, A1, B, n1, n2, tol, flag = 1)
     R = Vector{SparseMatrixCSC{Float64, Int}}(undef, levels - 1) # Vectors of sparse matrices
     P = Vector{SparseMatrixCSC{Float64, Int}}(undef, levels - 1)
 
+    #time_start2 = Base.time()
     for i = 2:levels
         if flag == 1 # For A1 and A3 which are rectangles
             R[i - 1] = build_Restriction_matrix(flag, nx[i - 1], nx[i], ny[i - 1], ny[i])
@@ -833,11 +839,11 @@ function multigrid_vic(nox, noy, overlap, A1, B, n1, n2, tol, flag = 1)
         # Create prolongation matrix from the restriction
         P[i - 1] = 4 * R[i - 1]'
     end 
-    
+    #time_end2 = Base.time()
+
     # Inniate A, b, x, D vectors
 
     A = Vector{SparseMatrixCSC{ComplexF64, Int}}(undef, levels) # Vector of sparse matrices
-    D = Vector{Vector{ComplexF64}}(undef, levels) # Keep the diagonal for Jacobi / Gauss Seidel
     b = Vector{Vector{ComplexF64}}(undef, levels)
     x = similar(b)
 
@@ -852,7 +858,6 @@ function multigrid_vic(nox, noy, overlap, A1, B, n1, n2, tol, flag = 1)
     for i = 1: levels
         b[i] = zeros(ComplexF64, size(A[i])[1])
         x[i] = similar(b[i])
-        D[i] = diag(A[i])
     end
 
     # Build the RHS's top level
@@ -862,6 +867,7 @@ function multigrid_vic(nox, noy, overlap, A1, B, n1, n2, tol, flag = 1)
     norm_b = norm(b[1])
 
     # Iterate over all levels
+    #time_start = Base.time()
     for it = 1: Nmax
         for i = 2: levels - 1
             x[i] = bicgstab_vic(A[i], b[i], 10e-10, n1)
@@ -880,10 +886,19 @@ function multigrid_vic(nox, noy, overlap, A1, B, n1, n2, tol, flag = 1)
             break;
         end
         if it == Nmax
-            #println("Exiting with max iterations on multigrid")
+            println("Exiting with max iterations on multigrid")
             break;
         end
     end
+    #time_end = Base.time()
+    #time = time_end - time_start
+    #time = round(time, digits = 4)
+
+    
+    #time2 = time_end2 - time_start2
+    #time2 = round(time2, digits = 4)
+    #println("Time elapsed after loop: ", time)
+    #println("Τime elapsed for creation of matrices R and P: ", time2)
     return x[1]
 end
 
@@ -902,7 +917,7 @@ function map(flag, nx::Int, n_inner::Int = 0, ny::Int = nx)
                 n_act += 1
                 map_index[y, x] = n_act
                 push!(map_coords, (y, x))
-            elseif (( y <= ny) || (x <= nx)) && flag == 1
+            elseif flag == 1
                 n_act += 1
                 map_index[y, x] = n_act
                 push!(map_coords, (y, x))
@@ -951,8 +966,8 @@ function build_Restriction_matrix(flag, nfx_bb::Int, ncx_bb::Int, nfy_bb::Int = 
                 tfx = xf_ctr + off_x # Target fine x
 
                 if (1 <= tfy <= nfy_bb) && (1 <= tfx <= nfx_bb)
-                    if (((tfx <= nf_inner && tfy <= nfy_bb) || (tfy <= nf_inner && tfx <= nfx_bb)) && flag == 2)||(((tfy <= nfy_bb) || (tfx <= nfx_bb)) && flag == 1)
-                        kfL = f_map_index[tfy, tfx]
+                    kfL = f_map_index[tfy, tfx]
+                    if kfL>0
                         push!(I, kcL)
                         push!(J, kfL)
                         push!(V, weight)
