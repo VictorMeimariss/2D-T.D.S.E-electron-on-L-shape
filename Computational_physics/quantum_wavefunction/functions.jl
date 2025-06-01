@@ -726,8 +726,8 @@ function domain_decomposition(A, b, s1, s2, s3, nx_half, ny_half, overlap, flag)
     elseif flag == 2 # Using multigrid and bicgstab as a smoother
 
         # Parameters
-        n1 = 12
-        n2 = 8
+        n1 = 6
+        n2 = 4
 
         # Getting sizes for multigrid
 
@@ -868,7 +868,7 @@ end
 function multigrid_vic(A, R, P, levels, B, n1, n2, tol)
 
     # Parameters
-    Nmax = 100
+    Nmax = 17
 
     # Iniate b and x vectors 
     b = Vector{Vector{ComplexF64}}(undef, levels)

@@ -11,8 +11,8 @@ import .Functions
 domain = (-1, 1) # In nanometers
 time = (0, 1)
 domain_min = domain[1]
-max_length = 0.025
-overlaps = 20 # For domain decomposition
+max_length = 0.005
+overlaps = 0 # For domain decomposition
 iterations = 1 #3000 #crank nicolson frames
 
 # Wavefunction parameters 
