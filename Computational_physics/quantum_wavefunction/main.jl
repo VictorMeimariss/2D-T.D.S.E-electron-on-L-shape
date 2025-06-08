@@ -1,6 +1,6 @@
 using Plots
 using SparseArrays
-plotlyjs() # Enable PlotlyJS backend for interactivity
+#plotlyjs() # Enable PlotlyJS backend for interactivity
 include("functions.jl")
 import .Functions
 
@@ -11,8 +11,8 @@ import .Functions
 domain = (-1, 1) # In nanometers
 time = (0, 1)
 domain_min = domain[1]
-max_length = 0.005
-overlaps = 0 # For domain decomposition
+max_length = 0.025
+overlaps = 20 # For domain decomposition
 iterations = 1 #3000 #crank nicolson frames
 
 # Wavefunction parameters 
@@ -43,10 +43,10 @@ nx_half = mesh[11]
 ny_half = mesh[12]
 
 # Potential function
-V_flag = 2 # Potential V flag, 1 = box, 2 = box with circle barrier, 3 = box with circle well
-V0 = 15 # Only needed for flags>1 is in eV
+V_flag = 3 # Potential V flag, 1 = box, 2 = box with circle barrier, 3 = box with circle well
+V0 = 10 # Only needed for flags>1 is in eV!!
 x_0 = 0.0 # Circle parameters
-y_0 = - 0.25
+y_0 = - 0.5
 r_0 = 0.5
 V_potential_func = Functions.V_function(V_flag, V0, x_0, y_0, r_0)
 
@@ -61,20 +61,20 @@ psi_0(x, y) = Functions.wavefunction(x, y; x0, y0, sigma, kx, ky)
 
 # Currently commenting out lines i dont need to test my script!
 
-#= Save as mp4
+# Save as mp4
 # n steps of time
 time_domain = time[2] - time[1]
 n_steps = Int128(time_domain ÷ dt) + 1
 
-no_frames = 10#17000
-frame_inter = 1#100
+no_frames = 160#7200
+frame_inter = 80
 
 anim = Functions.animated_solution(coords, nop, psi_0, time, matrices..., no_frames, frame_inter)# or n_steps
-mp4(anim, "Animations/Electron/test.mp4", fps=15)
-println("Done")=#
+mp4(anim, "Animations/Electron/well_10ev.mp4", fps=15)
+println("Done")
 
 
-# Create two plots for testing
+#= Create two plots for testing
 psi = Functions.solution(coords, nop, psi_0, time, matrices..., a, b, c, nx_half, ny_half, overlaps, iterations)
 #
 psi_final = abs2.(psi[1])
@@ -110,5 +110,5 @@ p1 = surface(xg, yg, Z,
         colorbar=true,
         colorscale="Viridis",
         showscale=true)
-display(p1)
+display(p1)=#
 return 0

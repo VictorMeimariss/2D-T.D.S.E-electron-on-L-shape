@@ -3,8 +3,8 @@ explaining the numbers in my report. =#
 module Functions
 using SparseArrays, LinearAlgebra, Arpack, Plots, SparseArrays, IncompleteLU
 
-plotlyjs() # Enable PlotlyJS backend for interactivity
-#gr() # Backend for animations change to this for stable animations as well as low memory images when testing
+#plotlyjs() # Enable PlotlyJS backend for interactivity
+gr() # Backend for animations change to this for stable animations as well as low memory images when testing
 
 # Electron constants for my domain in nanometers and femtoseconds
 const h_bar = 0.65821220e-3 # h_bar actual value in eV * ps  
@@ -440,7 +440,7 @@ function animated_solution(coords, nop, psi_zero, time, A, B, lengthr, dt, bound
     xg = yg = range(-1, 1, step = step_size)
 
     # Calculate global maximum for consistent scaling in plotting
-    global_max = maximum(abs2.(psi_0)) * 1.8
+    global_max = maximum(abs2.(psi_0)) * 3
 
     # Preconditioning
     A_LU = lu(A)
