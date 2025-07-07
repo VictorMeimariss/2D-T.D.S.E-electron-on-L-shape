@@ -726,8 +726,8 @@ function domain_decomposition(A, b, s1, s2, s3, nx_half, ny_half, overlap, flag)
     elseif flag == 2 # Using multigrid and bicgstab as a smoother
 
         # Parameters
-        n1 = 6
-        n2 = 4
+        n1 = 3
+        n2 = 2
 
         # Getting sizes for multigrid
 
@@ -868,7 +868,7 @@ end
 function multigrid_vic(A, R, P, levels, B, n1, n2, tol)
 
     # Parameters
-    Nmax = 17
+    Nmax = 15
 
     # Iniate b and x vectors 
     b = Vector{Vector{ComplexF64}}(undef, levels)
@@ -886,20 +886,22 @@ function multigrid_vic(A, R, P, levels, B, n1, n2, tol)
 
     # Iterate over all levels
     for it = 1: Nmax
-        for i = 2: levels - 1
-            x[i] = bicgstab_vic(A[i], b[i], 10e-10, n1)
-            b[i + 1] = R[i] * (b[i] - A[i] * x[i])
+        for i = 1: levels - 1
+            x[i] = gmres_vic(A[i], b[i], 10e-10, n1, x[i])#bicgstab_vic(A[i], b[i], 10e-10, n1)
+            residual = b[i] - A[i] * x[i]
+            b[i + 1] = R[i] * residual
             x[i + 1][:].= 0
         end
         x[end] = A[end] \ b[end] 
 
         for i = levels - 1 : -1: 1
-            x[i] = x[i] + P[i] * x[i+1]
-            x[i] = bicgstab_vic(A[i], b[i], 10e-10, n2)
+            x[i] .+= P[i] * x[i+1]
+            x[i] = gmres_vic(A[i], b[i], 10e-10, n2, x[i])#bicgstab_vic(A[i], b[i], 10e-10, n2)
         end
 
         nrm = norm(b[1] - A[1] * x[1])
         if nrm < norm_b * tol
+            println("Converged in $it V cycles")
             break;
         end
         if it == Nmax
@@ -997,5 +999,98 @@ function build_Restriction_matrix(flag, nfx_bb::Int, ncx_bb::Int, nfy_bb::Int = 
         end
     end=#
     return R
+end
+function gmres_vic(A, b, tol, Nmax, x0; m::Int = 30)
+    n = size(A, 1)
+    x = copy(x0)
+
+    # --- 1. Δημιουργία του ILU προετοιμαστή (Preconditioner) ---
+    # Αυτό είναι το "μυστικό όπλο" που είχε η bicgstab.
+    K = ilu(A, τ = 1e-4)
+
+    norm_b = norm(b)
+    if norm_b == 0.0; return x; end
+
+    m_actual = min(m, Nmax)
+    if m_actual == 0; return x; end
+
+    # --- 2. Υπολογισμός του ΠΡΟΕΤΟΙΜΑΣΜΕΝΟΥ υπολοίπου ---
+    true_residual = b - A * x
+    # Έλεγχος αν έχουμε ήδη συγκλίνει
+    if norm(true_residual) / norm_b < tol
+        return x
+    end
+    r = K \ true_residual
+
+    norm_r = norm(r)
+    
+    Q = zeros(ComplexF64, n, m_actual + 1)
+    H = zeros(ComplexF64, m_actual + 1, m_actual)
+    Q[:, 1] = r / norm_r
+
+    g = zeros(ComplexF64, m_actual + 1)
+    g[1] = norm_r
+
+    cs = zeros(ComplexF64, m_actual)
+    sn = zeros(ComplexF64, m_actual)
+    m_eff = m_actual
+
+    # --- Κύριος Βρόχος ---
+    for j = 1:m_actual
+        # --- 3. Πολλαπλασιασμός με τον ΠΡΟΕΤΟΙΜΑΣΜΕΝΟ πίνακα ---
+        # Αντί για w = A*q, κάνουμε w = K⁻¹ * A * q
+        w_temp = A * Q[:, j]
+        w = K \ w_temp
+
+        # Η υπόλοιπη διαδικασία Arnoldi παραμένει ίδια
+        for i = 1:j
+            H[i, j] = dot(Q[:, i], w)
+            w -= H[i, j] * Q[:, i]
+        end
+        H[j+1, j] = norm(w)
+
+        for i = 1:j-1
+            temp = cs[i] * H[i, j] + sn[i] * H[i+1, j]
+            H[i+1, j] = -conj(sn[i]) * H[i, j] + cs[i] * H[i+1, j]
+            H[i, j] = temp
+        end
+
+        cs[j], sn[j] = givens_rotation(H[j, j], H[j+1, j])
+        H[j, j] = cs[j] * H[j, j] + sn[j] * H[j+1, j]
+        H[j+1, j] = 0.0
+
+        g[j+1] = -conj(sn[j]) * g[j]
+        g[j] = cs[j] * g[j]
+
+        # Ο έλεγχος σύγκλισης εδώ βασίζεται στο προετοιμασμένο υπόλοιπο
+        # Για smoother, δεν είναι τόσο κρίσιμος.
+        if abs(g[j+1]) / norm_b < tol 
+            m_eff = j; break
+        end
+        
+        if abs(H[j+1, j]) > 1e-14
+             Q[:, j+1] = w / H[j+1, j]
+        else
+             m_eff = j; break
+        end
+    end
+
+    # Λύση του μικρού συστήματος και ενημέρωση της λύσης
+    y = H[1:m_eff, 1:m_eff] \ g[1:m_eff]
+    x += Q[:, 1:m_eff] * y
+    
+    return x
+end
+
+# Βοηθητική συνάρτηση για τις περιστροφές Givens (παραμένει η ίδια)
+function givens_rotation(a, b)
+    if b == 0.0
+        return 1.0, 0.0
+    else
+        r = sqrt(abs2(a) + abs2(b))
+        c = a / r
+        s = b / r
+        return c, s
+    end
 end
 end # Module end
