@@ -1,1 +1,0 @@
-This would be needed if gps module wasn't accurate.

@@ -1,1 +1,0 @@
-This folder contains all excel, old script docs that the team needs but is not used in the project itself.

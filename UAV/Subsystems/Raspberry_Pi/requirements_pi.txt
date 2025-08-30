@@ -1,5 +1,0 @@
-RPi.GPIO
-pyserial
-numpy
-scikit-learn
-requests
