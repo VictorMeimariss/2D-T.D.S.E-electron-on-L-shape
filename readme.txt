@@ -1,1 +1,1 @@
-These are the projects that I am currently working on, will upload cfd simulator scripts soon, currently working mostly on the UAV.
+Developed 2D F.E.M solver for the time dependant Schrödinger equation under an L shaped domain using computational physics principles and numerical methods to test and benchmark custom preconditioners as well as solvers in julia. Created animations of the electron under different potentials in this L shaped domain with Dirchlet conditions and simulated quantum tunneling and bound states.
